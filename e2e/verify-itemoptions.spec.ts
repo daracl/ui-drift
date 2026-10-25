@@ -54,8 +54,9 @@ test.describe('[OPT] 예제: 선택한 항목의 locked / resizable 옵션', () 
     // 드래그해도 움직이지 않는다
     await dragHandle(page, 'a', 300, 150);
     expect(await getItem(page, 'a')).toMatchObject({ x: before.x, y: before.y, w: before.w, h: before.h });
-    // locked 이면 resizable 옵션은 흐리게 표시된다
-    await expect(page.locator('#lblResizable')).toHaveClass(/off/);
+    // locked 만 지정하면 크기도 고정(기본)이라 resizable 은 해제된 것으로 표시된다 (독립 제어: 명시하지 않았을 뿐)
+    await expect(page.locator('#optResizable')).not.toBeChecked();
+    expect(await layoutItem(page, 'a')).not.toHaveProperty('resizable');
 
     await page.click('#export');
     expect(JSON.parse(await page.inputValue('#json')).items.find((i: any) => i.id === 'a').locked).toBe(true);
@@ -125,7 +126,7 @@ test.describe('[OPT] 예제: 선택한 항목의 locked / resizable 옵션', () 
     await page.locator(`${card('a')} .ddr-content`).click(); // locked 항목도 선택할 수 있다
     await expect(page.locator('#optName')).toHaveText('선택: a (test1)');
     await expect(page.locator('#optLocked')).toBeChecked();
-    await expect(page.locator('#optResizable')).toBeChecked();
+    await expect(page.locator('#optResizable')).not.toBeChecked(); // locked 기본값: 크기도 고정
 
     await select(page, 'c'); // 다른 항목은 영향받지 않는다
     await expect(page.locator('#optLocked')).not.toBeChecked();
@@ -172,5 +173,93 @@ test.describe('[OPT] 예제: 선택한 항목의 locked / resizable 옵션', () 
     await page.mouse.up();
     expect(await getItem(page, 'a')).toMatchObject({ x: locked.x, y: locked.y });
     expect(await hasOverlap(page)).toBe(false);
+  });
+
+  test('OPT-09 독립 제어: locked + resizable 을 함께 체크하면 위치는 고정, 크기만 마우스로 조절된다', async ({
+    page,
+  }) => {
+    await select(page, 'a');
+    await page.check('#optLocked');
+    await page.check('#optResizable'); // locked 의 기본(크기 고정)과 다르므로 resizable:true 가 명시된다
+    expect(await layoutItem(page, 'a')).toMatchObject({ locked: true, resizable: true });
+    await expect(page.locator(card('a'))).toHaveClass(/ddr-locked/);
+    await expect(page.locator(card('a'))).not.toHaveClass(/ddr-no-resize(s|$)/);
+
+    // 오른쪽 아래 핸들은 보이고 왼쪽 핸들은 숨겨진다
+    const display = (dir: string) =>
+      page
+        .locator(`${card('a')} .ddr-resize-handle[data-dir="${dir}"]`)
+        .evaluate((el: Element) => getComputedStyle(el).display);
+    expect(await display('se')).not.toBe('none');
+    expect(await display('sw')).toBe('none');
+
+    // 드래그 이동은 막힌다
+    const before = await getItem(page, 'a');
+    await dragHandle(page, 'a', 300, 150);
+    expect(await getItem(page, 'a')).toMatchObject({ x: before.x, y: before.y });
+
+    // 우하단 핸들로 크기는 조절된다
+    const m = await page.evaluate(() => (window as any).editor.getMetrics());
+    const g = await box(page, `${card('a')} .ddr-resize-handle[data-dir="se"]`);
+    await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(g.x + g.width / 2 + (m.cellWidth + m.gap), g.y + g.height / 2 + (m.rowHeight + m.gap), {
+      steps: 8,
+    });
+    await page.mouse.up();
+    const after = await getItem(page, 'a');
+    expect(after).toMatchObject({ x: before.x, y: before.y, w: before.w + 1, h: before.h + 1 });
+    expect(await hasOverlap(page)).toBe(false);
+
+    // 다시 resizable 을 해제하면 기본값(크기 고정)이 되어 명시가 사라진다
+    await page.uncheck('#optResizable');
+    expect(await layoutItem(page, 'a')).not.toHaveProperty('resizable');
+    await expect(page.locator(card('a'))).toHaveClass(/ddr-no-resize/);
+  });
+
+  test('OPT-10 독립 제어: resizable 만 해제하면 크기만 고정되고 이동은 된다 (locked 와 반대 조합)', async ({
+    page,
+  }) => {
+    await select(page, 'b');
+    await page.uncheck('#optResizable');
+    await expect(page.locator('#optLocked')).not.toBeChecked();
+    expect(await page.evaluate(() => (window as any).editor.getItemState('b'))).toEqual({
+      locked: false,
+      movable: true,
+      resizable: false,
+      resizableOption: false,
+    });
+    const m = await page.evaluate(() => (window as any).editor.getMetrics());
+    const x0 = (await getItem(page, 'b')).x;
+    await dragHandle(page, 'b', 3 * (m.cellWidth + m.gap), 0);
+    expect((await getItem(page, 'b')).x).toBeGreaterThan(x0);
+  });
+
+  test('OPT-11 옵션 lockedResizable: 체크하면 resizable 을 명시하지 않은 locked 항목도 크기를 조절할 수 있다', async ({
+    page,
+  }) => {
+    await select(page, 'c');
+    await page.check('#optLocked');
+    await expect(page.locator('#optResizable')).not.toBeChecked();
+    await page.check('#optLockedResizable'); // 에디터 전체 기본값 변경
+    await expect(page.locator('#optResizable')).toBeChecked(); // c 는 명시하지 않았으므로 기본값을 따른다
+    expect(await layoutItem(page, 'c')).not.toHaveProperty('resizable');
+    expect(await page.evaluate(() => (window as any).editor.getItemState('c'))).toMatchObject({
+      locked: true,
+      resizable: true,
+      resizableOption: null,
+    });
+
+    const m = await page.evaluate(() => (window as any).editor.getMetrics());
+    const before = await getItem(page, 'c');
+    const g = await box(page, `${card('c')} .ddr-resize-handle[data-dir="se"]`);
+    await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2 + (m.rowHeight + m.gap), { steps: 6 });
+    await page.mouse.up();
+    expect(await getItem(page, 'c')).toMatchObject({ x: before.x, y: before.y, h: before.h + 1 });
+
+    await page.uncheck('#optLockedResizable');
+    await expect(page.locator(card('c'))).toHaveClass(/ddr-no-resize/);
   });
 });

@@ -13,6 +13,7 @@ export type {
   DriftDragMode,
   DriftEditorEvents,
   DriftEditorOptions,
+  DriftItemState,
   DriftResizeHandle,
   DriftSizeChange,
   DriftSizeNotify,

@@ -100,14 +100,16 @@ export class PointerController {
 
     const snapshot = this.editor.getItems();
     const origin = snapshot.find((item) => item.id === id);
-    if (!origin || origin.locked) return;
+    if (!origin) return;
 
     let kind: SessionKind | undefined;
     const grip = target.closest<HTMLElement>(`.${CLS.resizeHandle}`);
     const dir: ResizeDir = grip?.dataset.dir === 'sw' ? 'sw' : 'se';
     if (grip) {
-      if (this.editor.isResizable() && origin.resizable !== false) kind = 'resize';
-    } else if (this.editor.isDraggable() && this.canStartDrag(e, target)) {
+      // 크기 조절은 위치 고정(locked)과 독립이다. 단 왼쪽 핸들은 x 가 바뀌므로 위치가 고정된 항목에는 쓸 수 없다
+      if (this.editor.isResizable() && this.editor.canResize(origin) && !(dir === 'sw' && origin.locked))
+        kind = 'resize';
+    } else if (!origin.locked && this.editor.isDraggable() && this.canStartDrag(e, target)) {
       kind = 'drag';
     }
     if (!kind) return;
@@ -228,14 +230,14 @@ export class PointerController {
       target = { x: s.origin.x, y: s.origin.y, ...size };
       key = `${size.w},${size.h}`;
       if (key === s.lastKey) return;
-      preview = resizeItem(s.snapshot, columns, s.id, size.w, size.h, editor.isFloat());
+      preview = resizeItem(s.snapshot, columns, s.id, size.w, size.h, editor.isFloat(), editor.isLockedResizable());
     }
 
     s.lastKey = key;
     s.preview = preview;
     const moved = preview.find((item) => item.id === s.id) as DriftItem;
     const lockedHit = firstCollision(
-      s.snapshot.filter((item) => item.locked),
+      s.snapshot.filter((item) => item.locked && item.id !== s.id), // 크기를 조절하는 자기 자신(locked)은 제외한다
       target,
     );
 
@@ -332,11 +334,10 @@ export class PointerController {
     const dir = arrows[e.key];
     if (dir) {
       e.preventDefault();
-      if (item.locked) return;
       if (e.shiftKey) {
-        if (this.editor.isResizable() && item.resizable !== false)
+        if (this.editor.isResizable() && this.editor.canResize(item))
           this.editor.resizeItem(id, item.w + dir[0], item.h + dir[1], { source: 'user' });
-      } else if (this.editor.isDraggable()) {
+      } else if (!item.locked && this.editor.isDraggable()) {
         this.editor.moveItem(id, item.x + dir[0], item.y + dir[1], { source: 'user' });
       }
       this.editor.getItemElement(id)?.focus({ preventScroll: true });

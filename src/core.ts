@@ -1,5 +1,6 @@
 export { compact } from './core/compact';
 export { diffItems, itemsEqual, layoutsEqual } from './core/diff';
+export { isMovable, isResizable } from './core/flags';
 export {
   clamp,
   collides,

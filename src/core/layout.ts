@@ -165,7 +165,8 @@ export function sanitizeItem(raw: DriftItem): DriftItem {
     if (typeof raw[key] === 'number' && Number.isFinite(raw[key])) item[key] = raw[key];
   }
   if (raw.locked === true) item.locked = true;
-  if (raw.resizable === false) item.resizable = false;
+  // true/false 모두 의미가 있다: 생략하면 locked 를 따르고, 명시하면 locked 와 무관하게 크기 조절 가능 여부를 정한다
+  if (typeof raw.resizable === 'boolean') item.resizable = raw.resizable;
   if (typeof raw.title === 'string') item.title = raw.title;
   if (typeof raw.content === 'string') item.content = raw.content;
   if (isObj(raw.props)) {

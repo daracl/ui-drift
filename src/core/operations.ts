@@ -1,5 +1,6 @@
 import { DriftGeometry, DriftItem } from '@t/DriftLayout';
 import { ColumnIndex, compact } from './compact';
+import { isResizable } from './flags';
 import { firstCollision, getRowCount, normalizeItem } from './geometry';
 
 export type DriftItemInput = Partial<DriftGeometry> & Omit<DriftItem, keyof DriftGeometry>;
@@ -71,7 +72,12 @@ export function moveItem(
   return transform(items, columns, id, (item) => ({ ...item, x, y }), false, float);
 }
 
-/** 크기를 변경한다. min/max/컬럼 범위로 보정된다. locked 또는 resizable:false 항목은 거부한다 */
+/**
+ * 크기를 변경한다. min/max/컬럼 범위로 보정된다. 크기 조절이 금지된 항목(`isResizable` 가 false)은 거부한다.
+ * 위치 고정(locked)과 크기 조절은 독립이라, `locked:true, resizable:true` 항목은 위치(x, y)를 유지한 채 크기만 바뀐다.
+ * `lockedResizable` 은 `resizable` 을 명시하지 않은 locked 항목의 기본 허용 여부이다(기본 false).
+ * 다른 locked 항목과 겹치게 되면 거부한다.
+ */
 export function resizeItem(
   items: readonly DriftItem[],
   columns: number,
@@ -79,15 +85,19 @@ export function resizeItem(
   w: number,
   h: number,
   float = false,
+  lockedResizable = false,
 ): DriftItem[] {
-  // resizable:false 항목은 크기를 바꿀 수 없다 (updateItem 으로 프로그램에서 바꾸는 것은 허용)
-  if (items.some((item) => item.id === id && item.resizable === false)) return items.slice();
-  return transform(items, columns, id, (item) => ({ ...item, w, h }), false, float);
+  // 크기 조절이 금지된 항목은 바꿀 수 없다 (updateItem 으로 프로그램에서 바꾸는 것은 허용)
+  const target = items.find((item) => item.id === id);
+  if (!target || !isResizable(target, lockedResizable)) return items.slice();
+  // locked 항목도 resizable 이 명시되었다면 여기까지 왔으므로 transform 의 locked 거부를 통과시킨다
+  return transform(items, columns, id, (item) => ({ ...item, w, h }), true, float);
 }
 
 /**
  * 왼쪽 모서리에서 크기를 변경한다: 오른쪽 가장자리(x + w)를 고정하고 x 와 w 가 함께 바뀐다.
- * min/max 폭과 왼쪽 경계(x ≥ 0)를 지키며, locked 또는 resizable:false 항목은 거부한다.
+ * min/max 폭과 왼쪽 경계(x ≥ 0)를 지키며, 크기 조절이 금지된 항목은 거부한다.
+ * 왼쪽 가장자리가 움직이므로 **위치가 고정된(locked) 항목은 resizable:true 여도 거부**한다(오른쪽/아래 방향 resizeItem 만 가능).
  */
 export function resizeItemFromLeft(
   items: readonly DriftItem[],
@@ -98,7 +108,7 @@ export function resizeItemFromLeft(
   float = false,
 ): DriftItem[] {
   const target = items.find((item) => item.id === id);
-  if (!target || target.locked || target.resizable === false) return items.slice();
+  if (!target || target.locked || !isResizable(target)) return items.slice();
 
   const right = target.x + target.w;
   const minW = Math.max(1, Math.min(columns, Math.round(target.minW ?? 1)));

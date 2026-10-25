@@ -1,4 +1,5 @@
 import { compact } from '@/core/compact';
+import { isMovable, isResizable as isItemResizable } from '@/core/flags';
 import { diffItems, itemsEqual, layoutsEqual } from '@/core/diff';
 import { addItem, moveItem, normalizeItems, removeItem, resizeItem, updateItem } from '@/core/operations';
 import { createMetrics, getRowCount, hasOverlap, normalizeItem, toPixelRect } from '@/core/geometry';
@@ -13,6 +14,7 @@ import {
   DriftDragInSource,
   DriftEditorEvents,
   DriftEditorOptions,
+  DriftItemState,
   DriftResizeHandle,
   DriftSizeChange,
   DriftSyncItem,
@@ -113,6 +115,7 @@ export class DriftEditor {
   private draggable: boolean;
   private resizable: boolean;
   private keyboard: boolean;
+  private lockedResizable: boolean;
   /** 콘텐츠 훅에서 발생한 첫 예외 (렌더가 끝난 뒤 다시 던진다) */
   private hookError: { error: unknown } | undefined;
 
@@ -129,6 +132,7 @@ export class DriftEditor {
     this.draggable = options.draggable !== false;
     this.resizable = options.resizable !== false;
     this.keyboard = options.keyboard !== false;
+    this.lockedResizable = options.lockedResizable === true;
     this.historyEnabled = options.history !== false;
     this.programmaticEvents = options.programmaticEvents !== false;
     this.history = new History<DriftLayout>(options.historyLimit ?? 100);
@@ -309,7 +313,11 @@ export class DriftEditor {
   }
 
   resizeItem(id: string, w: number, h: number, opts?: DriftApplyOptions): void {
-    this.commitEffective(resizeItem(this.getItems(), this.getColumns(), id, w, h, this.isFloat()), 'resize', opts);
+    this.commitEffective(
+      resizeItem(this.getItems(), this.getColumns(), id, w, h, this.isFloat(), this.lockedResizable),
+      'resize',
+      opts,
+    );
   }
 
   /** @internal 현재 breakpoint 의 항목 배열로 모델을 갱신한다 */
@@ -503,6 +511,54 @@ export class DriftEditor {
     return this.resizable;
   }
 
+  // ───────────────────────────── 잠금 / 크기 조절 (독립 제어) ─────────────────────────────
+
+  /**
+   * 항목의 **위치 고정**(locked: 이동 금지 + 고정 장애물)을 켜고 끈다. 크기 조절 가능 여부(resizable)는 건드리지 않는다.
+   * 끄면 `locked` 속성이 제거되어 JSON 에 남지 않는다. 존재하지 않는 id 이면 undefined.
+   */
+  setLocked(id: string, locked: boolean, opts?: DriftApplyOptions): DriftItem | undefined {
+    return this.updateItem(id, { locked: locked ? true : undefined }, opts);
+  }
+
+  /**
+   * 항목의 **크기 조절 가능 여부**를 위치 고정(locked)과 독립적으로 정한다.
+   * `true`/`false` 는 명시값, `null` 은 명시를 지워 기본 규칙(locked 이면 고정, 에디터 옵션 `lockedResizable`)을 따르게 한다.
+   * 예) `setLocked(id, true); setResizable(id, true)` → 위치는 고정, 크기만 조절 가능.
+   */
+  setResizable(id: string, resizable: boolean | null, opts?: DriftApplyOptions): DriftItem | undefined {
+    return this.updateItem(id, { resizable: resizable === null ? undefined : resizable }, opts);
+  }
+
+  /** 항목의 잠금/크기조절 상태를 한 번에 조회한다. 존재하지 않는 id 이면 undefined */
+  getItemState(id: string): DriftItemState | undefined {
+    const item = this.layout.items.find((i) => i.id === id);
+    if (!item) return undefined;
+    return {
+      locked: !!item.locked,
+      movable: isMovable(item),
+      resizable: this.canResize(item),
+      resizableOption: item.resizable === undefined ? null : !!item.resizable,
+    };
+  }
+
+  /** @internal 이 항목의 크기를 조절할 수 있는지 (항목의 resizable 명시값 → locked/lockedResizable 옵션 순) */
+  canResize(item: Pick<DriftItem, 'locked' | 'resizable'>): boolean {
+    return isItemResizable(item, this.lockedResizable);
+  }
+
+  /** `resizable` 을 명시하지 않은 locked 항목의 크기 조절 기본 허용 여부 (옵션 lockedResizable) */
+  isLockedResizable(): boolean {
+    return this.lockedResizable;
+  }
+
+  /** locked 항목의 크기 조절 기본 허용 여부를 바꾼다. 명시한 항목별 resizable 은 영향받지 않는다 */
+  setLockedResizable(enable: boolean): void {
+    if (this.destroyed || this.lockedResizable === enable) return;
+    this.lockedResizable = enable;
+    this.render(); // 핸들 표시(ddr-no-resize)를 다시 계산한다
+  }
+
   /** 내부 키보드 처리(방향키 이동, Shift+방향키 리사이즈, Delete, Esc 선택 해제)를 켜고 끈다. 진행 중 드래그의 Esc 취소는 영향받지 않는다 */
   setKeyboard(enable: boolean): void {
     this.keyboard = enable;
@@ -689,7 +745,9 @@ export class DriftEditor {
       this.renderContent(el, item);
       this.applyRect(el, item);
       el.classList.toggle(CLS.locked, !!item.locked);
-      el.classList.toggle(CLS.noResize, !!item.locked || item.resizable === false);
+      el.classList.toggle(CLS.noResize, !this.canResize(item));
+      // 위치가 고정된 항목은 왼쪽 가장자리를 움직이는 sw 핸들만 숨긴다 (resizable:true 면 se 핸들은 남는다)
+      el.classList.toggle(CLS.noResizeLeft, !!item.locked);
     }
 
     this.itemEls.forEach((el, id) => {

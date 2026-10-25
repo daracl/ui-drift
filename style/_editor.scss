@@ -204,6 +204,8 @@
     );
   }
 
+  /* 위치가 고정된(locked) 항목: 왼쪽에서 조절하는 sw 핸들은 숨긴다 (se 핸들은 resizable 에 따라 보인다) */
+  .ddr-item.ddr-no-resize-left .ddr-resize-handle[data-dir='sw'],
   .ddr-item.ddr-no-resize .ddr-resize-handle,
   &.ddr-resize-disabled .ddr-resize-handle {
     display: none;

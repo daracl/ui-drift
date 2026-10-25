@@ -78,6 +78,7 @@ types → core → viewer
 `DriftLayout { version:1, columns, rowHeight, gap, float?, breakpoints?, items[] }`, `DriftItem { id, x, y, w, h, title?, minW/minH/maxW/maxH?, locked?, resizable?, content?, props?, responsive? }` (`src/types/DriftLayout.d.ts`).
 
 - 좌표는 0 기반 정수 셀 단위. 모든 core 연산은 **불변**이며 새 배열을 반환한다. 같은 입력은 같은 결과(정렬은 `compareYX` 가 id 로 동률을 깬다).
+- 잠금: `locked`(위치 고정 = 이동 금지 + 고정 장애물)와 `resizable`(크기 조절)은 **독립**이다. 판정은 반드시 `core/flags.ts` 의 `isMovable`/`isResizable(item, lockedResizable)` 를 쓴다(`resizable` 명시값 → 없으면 locked 이면 `lockedResizable`(기본 false), 아니면 true). `locked` 를 직접 보고 크기 조절을 막지 않는다. 위치만 고정된 항목은 `se` 핸들/`resizeItem`/Shift+방향키로 (x, y) 유지한 채 크기만 바뀌고, `sw` 핸들/`resizeItemFromLeft` 는 locked 에 쓸 수 없다. 포인터 미리보기·무효 placeholder 판정에서 크기를 조절하는 자기 자신(locked)은 장애물에서 제외한다.
 - 충돌: 이동/리사이즈 대상(anchor)을 목표 위치에 먼저 놓고 겹친 항목을 아래로 민 뒤 위로 압축한다. `locked` 항목은 장애물이며 locked 와 겹치는 이동은 거부된다. `float: true` 면 위로 올리지 않고(놓은 위치 유지) 겹칠 때만 민다. `float` 는 레이아웃 데이터에 저장되어 Editor/Viewer/반응형이 같은 정책을 쓴다.
 - 반응형: `breakpoints` 미지정이면 기본값(tablet ≤1024px 8열, mobile ≤640px 4열), `[]` 이면 비활성. 우선순위는 `item.responsive[bp]` 명시값 → 자동 변환(6열 이상 비례 축소, 미만은 세로 적층). 명시값은 고정되고 나머지가 비켜간다. breakpoint 편집은 해당 breakpoint 의 전체 항목을 `responsive[name]` 에 명시 저장한다.
 
@@ -148,7 +149,8 @@ types → core → viewer
 | `npm install` | 의존성 설치. 최초 1회 `npx playwright install chromium` |
 | `npm run dev` | Vite 개발 서버 (포트 5179, `uitest/index.html`) |
 | `npm run typecheck` / `npm run lint` | `tsc --noEmit` / `eslint "src/**/*.ts"` |
-| `npm run build` | `clean` → ESM/CJS(`index/core/viewer`) → UMD → CSS(sass) → d.ts |
+| `npm run build` | `clean` → ESM/CJS(`index/core/viewer`) → UMD → CSS(sass) → d.ts (`build:tsc`) |
+| `npm run check:dts` | `dist/**/*.d.ts` 에 내부 별칭(`@t/*`, `@/*`)이 남았거나 상대 import 가 해석되지 않으면 실패 (`build:tsc` 의 마지막 단계로도 실행됨) |
 | `npm run example` | `dist` 가 있을 때 `example/viewer.html|css` 생성 (JS 없는 Viewer) |
 | `npm test` | Jest. `test/build/*` 는 `dist/` 가 있어야 실행되고 없으면 skip 된다 → 빌드 후 실행할 것 |
 | `npm run pwtest` | Playwright 전체 (webServer 로 `vite.config.dev.js` 자동 기동, 포트 5179) |
@@ -159,6 +161,10 @@ types → core → viewer
 권장 검증 순서: `typecheck` → `lint` → `build` → `npx jest` → `npx playwright test`. 코드를 고친 뒤 `dist` 를 쓰는 테스트(`test/build`, `example`)는 반드시 `npm run build` 를 다시 실행한다.
 
 테스트 구성: Jest(jsdom) 는 레이아웃을 계산하지 않으므로 `editor.test.ts` 가 `getBoundingClientRect` 를 data 속성 기반으로 모킹한다. 실제 위치·반응형·터치·JS 비활성·CSP 는 Playwright 가 검증한다(JS 비활성은 `javaScriptEnabled:false` 컨텍스트, 터치는 CDP `Input.dispatchTouchEvent`). 애니메이션(0.15s) 도중 좌표를 읽으면 불안정하므로 `expect.poll` 이나 대기를 쓴다.
+
+### 배포 타입 선언(d.ts) 규칙
+
+`build:tsc` 의 순서는 **`tsc` → 원본 `src/**/*.d.ts` 복사(cpx) → `tsc-alias` → `check-dts`** 이다. `tsc-alias` 는 별칭이 가리키는 파일이 실제로 있을 때만 상대 경로로 바꾸는데, `src/types/*.d.ts` 는 `tsc` 가 출력하지 않고 복사 단계에서 `dist` 에 들어가므로, 복사 전에 `tsc-alias` 를 실행하면 `@t/*` 가 그대로 남아 외부 프로젝트가 타입을 해석하지 못한다. 순서를 바꾸지 않는다. 회귀 검사: `scripts/check-dts.mjs`, `test/build/dtsConsumer.test.ts`(npm pack 으로 설치한 소비자, `skipLibCheck:false`, Drift 전용 `paths` 없음).
 
 ## 9. Error Handling & Logging
 

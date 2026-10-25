@@ -14,7 +14,8 @@
 | `breakpoints` | tablet(≤1024, 8열), mobile(≤640, 4열) | `[]` 이면 반응형 비활성 |
 | `grid` / `gridColor` | true / - | 배경 모눈종이 격자. 색은 CSS 변수 `--ddr-grid-color`(기본 `rgba(148,163,184,.35)` 연한 반투명, 선 두께 0.5px)로 바꾸며, `gridColor` 옵션은 캔버스에 이 변수를 설정한다(영문/숫자/`#(),.%` 만 허용, 그 외는 무시) |
 | `resizeHandles` | `['se','sw']` | 표시할 리사이즈 핸들. `'se'` 우하단(오른쪽/아래로 조절), `'sw'` 좌하단(왼쪽/아래로 조절 — 오른쪽 가장자리를 고정하고 `x` 와 `w` 가 함께 바뀜). `[]` 이면 핸들 없음 |
-| `draggable` / `resizable` | true | `enableDrag()`/`enableResize()` 로 변경 가능 |
+| `draggable` / `resizable` | true | 에디터 **전체**의 이동/리사이즈 허용. `enableDrag()`/`enableResize()` 로 변경 가능 (항목별 `locked`/`resizable` 과 함께 적용되며 둘 다 허용이어야 조작된다) |
+| `lockedResizable` | false | `resizable` 을 명시하지 않은 **locked(위치 고정) 항목**의 크기 조절을 기본으로 허용할지. true 이면 locked 항목은 위치만 고정되고 크기는 조절된다. 항목에 `resizable` 을 명시하면 그 값이 항상 우선. `setLockedResizable()` 로 런타임 변경 |
 | `responsive` | false | true 이면 컨테이너 폭으로 breakpoint 자동 선택. 기본은 폭이 바뀌어도 기본 레이아웃 유지(`setBreakpoint` 로 명시 전환) |
 | `dragMode` | `'auto'` | `'auto'`(마우스=전체, 터치=핸들) / `'item'` / `'handle'` |
 | `removable` | false | 삭제 버튼, Delete 키 |
@@ -35,7 +36,11 @@
 | `addItem(item, opts?)` → item | `x`,`y` 생략 시 빈 자리 자동 배치. id 중복/빈 값은 예외 |
 | `removeItem(id, opts?)` → boolean | |
 | `updateItem(id, patch, opts?)` | title/content/props/min/max/locked 및 위치·크기(현재 breakpoint 에 저장) |
-| `moveItem(id, x, y, opts?)` / `resizeItem(id, w, h, opts?)` | 충돌 시 다른 항목이 아래로 밀린다. locked 는 거부 |
+| `moveItem(id, x, y, opts?)` / `resizeItem(id, w, h, opts?)` | 충돌 시 다른 항목이 아래로 밀린다. `moveItem` 은 locked 를, `resizeItem` 은 크기 조절이 금지된 항목(`getItemState().resizable === false`)을 거부한다. 다른 locked 와 겹치게 되면 거부 |
+| `setLocked(id, locked, opts?)` | **위치 고정**(이동 금지 + 고정 장애물)만 켜고 끈다. 크기 조절 설정은 건드리지 않는다 |
+| `setResizable(id, resizable, opts?)` | **크기 조절 가능 여부**를 위치 고정과 독립적으로 정한다. `true`/`false` 는 명시, `null` 은 명시를 지워 기본 규칙(locked 이면 고정, `lockedResizable` 옵션)을 따르게 한다 |
+| `getItemState(id)` | `{ locked, movable, resizable, resizableOption }` 로 항목의 잠금/크기조절 상태를 한 번에 조회 (`resizable` 은 최종 판정, `resizableOption` 은 명시값 또는 null) |
+| `setLockedResizable(bool)` / `isLockedResizable()` | 옵션 `lockedResizable` 의 런타임 변경/조회. 레이아웃 변경이 아니므로 이벤트/이력은 없다 |
 | `getLayout()` / `getItems()` / `getItem(id)` | 복사본 반환. `getItems` 는 현재 breakpoint 기준 |
 | `load(layout, opts?)` / `fromJSON(json)` / `toJSON(space?)` | 잘못된 데이터는 보정, 구조가 틀리면 예외 |
 | `clear(opts?)` / `reset(opts?)` | 전체 삭제 / 마지막 load 상태로 (undo 가능) |
@@ -76,6 +81,7 @@
 | 비교 | `diffItems`, `itemsEqual`, `layoutsEqual` |
 | 연산 | `addItem`, `removeItem`, `moveItem`, `resizeItem`, `resizeItemFromLeft`, `updateItem`, `findFreePosition`, `compact` |
 | 충돌 | `collides`, `findCollisions`, `firstCollision`, `hasOverlap` |
+| 잠금 판정 | `isMovable`, `isResizable` |
 | 좌표 | `createMetrics`, `toPixelRect`, `toGridPosition`, `toGridSize`, `getRowCount` |
 | 반응형 | `getBreakpoints`, `matchBreakpoint`, `deriveItems`, `resolveItems`, `applyItems` |
 
@@ -280,11 +286,30 @@ editor.setupDragIn('.palette .card', {
 - breakpoint 를 편집 중이면 좌표는 그 breakpoint 칸 기준이다. 호출자가 그대로 `editor.addItem({ ...item, id })` 하면 해당 breakpoint 의 `responsive[name]` 에 위치·크기가 저장되고(`addItem` 은 이 경우 x, y, w, h 를 모두 breakpoint 기준으로 해석한다), 기본 레이아웃에는 겹치지 않는 자동 위치로 추가된다.
 - 등록 해제(반환된 함수)와 `destroy()` 는 진행 중인 드래그까지 `onDrop` 없이 정리한다(ghost, 리스너, 원본의 `ddr-dragin-source` 클래스).
 
-## 항목 옵션: locked / resizable
+## 항목 옵션: locked / resizable (위치 고정과 크기 조절은 독립)
 
 | 필드 | 기본 | 설명 |
 | --- | --- | --- |
-| `locked` | false | 위치 고정. 드래그/리사이즈/키보드 이동 불가, 다른 항목이 비켜가며 locked 와 겹치는 이동은 거부 |
-| `resizable` | true | false 이면 크기 조절만 막는다(이동 가능). 리사이즈 핸들이 숨겨지고 `resizeItem` 이 거부. `locked` 이면 무시 |
+| `locked` | false | **위치 고정**: 이동(드래그/방향키/`moveItem`)을 막고 **고정 장애물**이 된다. 다른 항목이 비켜가며 locked 와 겹치게 되는 이동/리사이즈는 거부된다 |
+| `resizable` | (생략) | **크기 조절 가능 여부**. 생략하면 `locked` 를 따른다(locked 이면 false, 아니면 true — 에디터 옵션 `lockedResizable` 로 locked 의 기본값을 바꿀 수 있다). `true`/`false` 를 명시하면 `locked` 와 무관하게 그 값을 쓴다 |
 
-프로그램에서는 `editor.updateItem(id, { locked: true })` 처럼 런타임에 바꿀 수 있다. 에디터 전체 옵션 `draggable`/`resizable` 과 함께 적용되며 둘 다 true 여야 조작된다.
+| locked | resizable | 이동 | 크기 조절 | 고정 장애물 | 비고 |
+| --- | --- | :-: | :-: | :-: | --- |
+| 생략 | 생략 | O | O | X | 기본 |
+| true | 생략 | X | X | O | 기존 동작(호환). `lockedResizable:true` 옵션이면 크기 조절 O |
+| **true** | **true** | **X** | **O** | **O** | 위치만 고정, 크기만 조절 |
+| true | false | X | X | O | |
+| 생략 | **false** | O | **X** | X | 크기만 고정, 이동은 가능 |
+
+* 위치 고정 항목의 크기 조절은 **위치(x, y)를 유지한 채 오른쪽/아래 방향으로만** 바뀐다(`se` 핸들, `resizeItem`, Shift+방향키). 왼쪽 가장자리가 움직이는 `sw` 핸들과 `resizeItemFromLeft` 는 locked 항목에 쓸 수 없다(핸들은 `ddr-no-resize-left` 로 숨겨진다). 크기가 커져 다른 항목과 겹치면 그 항목이 아래로 밀리고, 다른 locked 항목과 겹치면 거부된다(무효 placeholder).
+* `resizable` 은 JSON 에 `true`/`false` 명시값이 모두 보존되고, 생략하면 키가 없다. 기본 규칙과 같아지는 변경은 `setResizable(id, null)` 로 명시를 지울 수 있다.
+* 프로그램 API: `setLocked(id, bool)`, `setResizable(id, bool|null)`, `getItemState(id)` (위 메서드 표 참고). `updateItem(id, { locked, resizable })` 도 같다. `updateItem` 으로 w/h 를 직접 바꾸는 것은 항상 허용된다.
+* 에디터 전체 옵션 `draggable`/`resizable` 은 항목별 값과 **함께** 적용된다(둘 다 허용이어야 조작된다).
+
+```ts
+editor.setLocked('chart', true);        // 위치 고정 (기본적으로 크기도 고정)
+editor.setResizable('chart', true);     // → 위치는 고정, 크기만 조절 가능
+editor.setResizable('table', false);    // 이동은 가능, 크기만 고정
+editor.getItemState('chart');           // { locked: true, movable: false, resizable: true, resizableOption: true }
+createDriftEditor(el, { lockedResizable: true });  // resizable 을 명시하지 않은 locked 항목도 크기 조절 허용
+```

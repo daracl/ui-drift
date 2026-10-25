@@ -75,7 +75,7 @@
     "build:esm": "vite build --config vite.config.js --mode production",
     "build:umd": "vite build --config vite.config.umd.js --mode production",
     "build:css": "sass --no-source-map style/daracl.drift.scss dist/daracl.drift.css && sass --no-source-map --style=compressed style/daracl.drift.scss dist/daracl.drift.min.css && sass --no-source-map --style=compressed style/daracl.drift.viewer.scss dist/daracl.drift.viewer.min.css",
-    "build:tsc": "tsc -p tsconfig-build.json --emitDeclarationOnly && tsc-alias -p tsconfig-build.json && cpx \"src/**/*.d.ts\" dist",
+    "build:tsc": "tsc -p tsconfig-build.json --emitDeclarationOnly && cpx \"src/**/*.d.ts\" dist && tsc-alias -p tsconfig-build.json && node scripts/check-dts.mjs",
     "clean": "rimraf dist",
     "docs:gen": "typedoc --tsconfig tsconfig.doc.json",
     "lint": "eslint \"src/**/*.ts\"",
@@ -86,6 +86,7 @@
     "example": "node scripts/build-example.mjs",
     "check": "npm run typecheck && npm run lint && npm test",
     "bench:core": "node scripts/bench-core.mjs",
-    "bench:editor": "node scripts/bench-editor.cjs"
+    "bench:editor": "node scripts/bench-editor.cjs",
+    "check:dts": "node scripts/check-dts.mjs"
   }
 }

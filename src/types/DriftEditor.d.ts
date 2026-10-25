@@ -71,6 +71,12 @@ export interface DriftEditorOptions {
   /** 리사이즈 허용 (기본 true) */
   resizable?: boolean;
   /**
+   * `resizable` 을 명시하지 않은 **locked(위치 고정) 항목**의 크기 조절을 기본으로 허용할지 (기본 false: locked 이면 크기도 고정).
+   * true 이면 locked 항목은 위치만 고정되고 (오른쪽/아래 방향의) 크기 조절은 가능하다. 항목에 `resizable` 을 명시하면 항상 그 값이 우선한다.
+   * `setLockedResizable()` 로 런타임에 바꿀 수 있다.
+   */
+  lockedResizable?: boolean;
+  /**
    * 표시할 리사이즈 핸들 (기본 ['se', 'sw']).
    * 'se' 는 우하단(오른쪽/아래로 조절), 'sw' 는 좌하단(왼쪽/아래로 조절. 오른쪽 가장자리는 고정되고 x 와 w 가 함께 바뀐다)
    */
@@ -268,4 +274,16 @@ export interface DriftEditorEvents {
    * 위치 이동만 한 항목은 포함되지 않는다. 호스트가 외부 위젯의 resize() 를 호출하는 데 쓴다.
    */
   sizeChange: (changes: DriftSizeChange[]) => void;
+}
+
+/** `getItemState()` 가 돌려주는 항목의 잠금/크기조절 상태 (위치 고정과 크기 조절은 독립) */
+export interface DriftItemState {
+  /** 위치 고정(고정 장애물, 이동 금지) 여부 */
+  locked: boolean;
+  /** 이동할 수 있는지 (= !locked) */
+  movable: boolean;
+  /** 크기를 조절할 수 있는지 (최종 판정: 항목의 resizable 명시값 → 없으면 locked/lockedResizable 옵션 기준) */
+  resizable: boolean;
+  /** 항목에 명시된 resizable 값. 명시하지 않아 locked 를 따르면 null */
+  resizableOption: boolean | null;
 }

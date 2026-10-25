@@ -50,7 +50,6 @@
     .item-options .name { font-weight: 600; min-width: 130px; }
     .item-options .name.none { color: #94a3b8; font-weight: 400; }
     .item-options label { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; }
-    .item-options label.off { color: #94a3b8; }
     .item-options .hint { color: #64748b; font-size: 12px; }
 
     #log {
@@ -84,9 +83,10 @@
   <!-- 항목 옵션: 에디터에서 항목을 선택한 뒤 체크하면 바로 적용된다 -->
   <div class="item-options" id="itemOptions">
     <span class="name none" id="optName">항목을 선택하세요</span>
-    <label id="lblLocked"><input type="checkbox" id="optLocked" disabled> locked (위치 고정: 이동/리사이즈 불가)</label>
+    <label id="lblLocked"><input type="checkbox" id="optLocked" disabled> locked (위치 고정: 이동 금지 + 고정 장애물)</label>
     <label id="lblResizable"><input type="checkbox" id="optResizable" disabled checked> resizable (크기 조절 가능)</label>
-    <span class="hint" id="optHint">locked 이면 resizable 은 무시됩니다.</span>
+    <label id="lblLockedResizable"><input type="checkbox" id="optLockedResizable"> lockedResizable (resizable 미지정 locked 의 기본 허용)</label>
+    <span class="hint" id="optHint">두 옵션은 독립입니다. locked 만 체크하면 크기도 고정(기본), resizable 도 체크하면 위치만 고정되고 크기는 조절됩니다.</span>
   </div>
   <!-- 끌어서 추가: 이 요소들을 아래 에디터로 끌어다 놓는다 -->
   <div class="palette" id="palette">
@@ -134,30 +134,38 @@
     const optName = document.getElementById('optName');
     const optLocked = document.getElementById('optLocked');
     const optResizable = document.getElementById('optResizable');
-    const lblResizable = document.getElementById('lblResizable');
+    const optLockedResizable = document.getElementById('optLockedResizable');
 
     function syncOptions() {
       const sel = editor.getSelected();
+      const st = sel ? editor.getItemState(sel.id) : undefined;
       optName.classList.toggle('none', !sel);
       optName.textContent = sel ? `선택: ${sel.id}${sel.title ? ' (' + sel.title + ')' : ''}` : '항목을 선택하세요';
       optLocked.disabled = !sel;
       optResizable.disabled = !sel;
-      optLocked.checked = !!(sel && sel.locked);
-      optResizable.checked = !sel || sel.resizable !== false;
-      // locked 이면 resizable 은 의미가 없으므로 흐리게 표시한다
-      lblResizable.classList.toggle('off', !!(sel && sel.locked));
+      optLocked.checked = !!(st && st.locked);
+      // 크기 조절 가능 여부의 최종 판정을 보여준다 (locked 만 있으면 기본적으로 false)
+      optResizable.checked = st ? st.resizable : true;
+      optLockedResizable.checked = editor.isLockedResizable();
     }
     editor.on('select', syncOptions);
     editor.on('layoutChange', syncOptions); // undo/redo/불러오기 등으로 값이 바뀐 경우에도 맞춘다
 
-    // true 일 때만 속성을 저장하고, 기본값으로 돌아가면 속성을 제거한다 (JSON 이 깔끔하게 유지됨)
+    // 위치 고정(locked)과 크기 조절(resizable)은 독립 API 로 제어한다.
+    // 기본 규칙과 같아지면 명시를 지워(null) JSON 에 속성이 남지 않게 한다
     optLocked.onchange = () => {
       const sel = editor.getSelected();
-      if (sel) editor.updateItem(sel.id, { locked: optLocked.checked ? true : undefined });
+      if (sel) editor.setLocked(sel.id, optLocked.checked);
     };
     optResizable.onchange = () => {
       const sel = editor.getSelected();
-      if (sel) editor.updateItem(sel.id, { resizable: optResizable.checked ? undefined : false });
+      if (!sel) return;
+      const defaultValue = !sel.locked || editor.isLockedResizable();
+      editor.setResizable(sel.id, optResizable.checked === defaultValue ? null : optResizable.checked);
+    };
+    optLockedResizable.onchange = () => {
+      editor.setLockedResizable(optLockedResizable.checked);
+      syncOptions();
     };
     syncOptions();
 

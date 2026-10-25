@@ -121,7 +121,7 @@ npm test                 # Jest (core, viewer, editor(jsdom), dist 번들 검사
 npm run pwtest           # Playwright (데스크톱 마우스, 모바일 터치, JS 비활성 Viewer, CSP, Editor↔Viewer 일치)
 npx playwright install chromium   # 최초 1회
 npm run dev              # uitest/editor.html 수동 확인 (http://127.0.0.1:5179)
-                         #  - 항목을 선택하고 상단 패널의 locked / resizable 을 체크하면 바로 적용된다
+                         #  - 항목을 선택하고 상단 패널의 locked(위치 고정) / resizable(크기 조절)을 독립적으로 체크하면 바로 적용된다
                          #  - 팔레트(+ Chart 등)를 캔버스로 끌어다 놓아 추가, float/격자 토글, breakpoint 선택
 ```
 

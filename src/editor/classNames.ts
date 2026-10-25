@@ -18,6 +18,7 @@ export const CLS = {
   selected: 'ddr-selected',
   locked: 'ddr-locked',
   noResize: 'ddr-no-resize',
+  noResizeLeft: 'ddr-no-resize-left',
   dragging: 'ddr-dragging',
   resizing: 'ddr-resizing',
   noAnimate: 'ddr-no-animate',

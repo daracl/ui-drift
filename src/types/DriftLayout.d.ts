@@ -19,9 +19,16 @@ export interface DriftItem extends DriftGeometry {
   minH?: number;
   maxW?: number;
   maxH?: number;
-  /** true 이면 이동/리사이즈 불가(위치 고정), 다른 항목이 비켜간다 */
+  /**
+   * true 이면 **위치 고정**: 이동할 수 없고 고정 장애물이 되어 다른 항목이 비켜간다.
+   * 크기 조절은 `resizable` 로 독립 제어한다 (`resizable` 을 생략하면 locked 이면 크기도 고정).
+   */
   locked?: boolean;
-  /** false 이면 크기를 조절할 수 없다 (이동은 가능). 기본 true. locked 가 true 이면 무시되고 항상 고정이다 */
+  /**
+   * 크기 조절 가능 여부 (이동/잠금과 독립). 생략하면 `locked` 를 따른다(locked 이면 false, 아니면 true).
+   * `true` 이면 locked 항목도 크기를 조절할 수 있다(위치는 고정, 오른쪽/아래 방향만; 왼쪽 가장자리 핸들은 쓸 수 없다).
+   * `false` 이면 locked 여부와 무관하게 크기를 조절할 수 없다.
+   */
   resizable?: boolean;
   /** 컴포넌트 제목. Editor 에서는 상단 핸들 바에, Viewer 에서는 본문 위에 텍스트로 표시된다 */
   title?: string;

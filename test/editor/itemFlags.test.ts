@@ -14,15 +14,19 @@ describe('item locked / resizable', () => {
     expect(updateItem(items(), 12, 'a', { w: 3 })[0].w).toBe(3);
   });
 
-  it('JSON 보정: resizable 은 false 만 보존된다', () => {
+  it('JSON 보정: resizable 은 true/false 명시값을 모두 보존하고 boolean 이 아니면 버린다', () => {
     const layout = parseLayout({
       items: [
         { id: 'a', x: 0, y: 0, w: 1, h: 1, resizable: false, locked: true },
         { id: 'b', x: 1, y: 0, w: 1, h: 1, resizable: true },
+        { id: 'c', x: 2, y: 0, w: 1, h: 1, resizable: 'yes' },
+        { id: 'd', x: 3, y: 0, w: 1, h: 1 },
       ],
     });
     expect(layout.items[0]).toMatchObject({ resizable: false, locked: true });
-    expect(layout.items[1]).not.toHaveProperty('resizable');
+    expect(layout.items[1]).toMatchObject({ resizable: true }); // 명시값(locked 와 독립)
+    expect(layout.items[2]).not.toHaveProperty('resizable');
+    expect(layout.items[3]).not.toHaveProperty('resizable');
   });
 
   it('Viewer 출력에는 영향이 없다', () => {

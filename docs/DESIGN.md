@@ -55,7 +55,7 @@ interface DriftBreakpoint { name; maxWidth; columns }
 
 1. 이동/리사이즈 대상(anchor)을 목표 좌표에 먼저 놓는다.
 2. 나머지를 `(y, x)` 순으로 배치하면서 이미 놓인 항목과 겹치면 아래로 민다.
-3. 전체를 한 번 더 위로 압축(compact)한다. `locked` 항목은 고정 장애물이며, locked 와 겹치는 이동은 거부된다.
+3. 전체를 한 번 더 위로 압축(compact)한다. `locked` 항목은 고정 장애물이며, locked 와 겹치는 이동/리사이즈는 거부된다. `locked`(위치 고정)와 `resizable`(크기 조절)은 독립이다: `resizable` 을 생략하면 locked 를 따르고(locked 이면 크기도 고정), 명시하면 locked 와 무관하다. 위치만 고정된 항목은 `(x, y)` 를 유지한 채 오른쪽/아래로만 크기가 바뀐다(`core/flags.ts`).
 4. `layout.float = true` 이면 위로 올리는 압축(2~3 의 상향 이동)을 하지 않는다. 놓은 위치를 유지하고 겹칠 때만 아래로 민다. 값은 레이아웃에 저장되어 Editor/Viewer/반응형 변환이 같은 정책을 쓴다.
 5. 동일 입력 → 동일 출력(안정 정렬, 순수 함수).
 
