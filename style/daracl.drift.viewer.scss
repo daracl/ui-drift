@@ -1,0 +1,12 @@
+/**
+ * Drift Viewer 공통 스타일 (선택).
+ * 위치/크기/반응형 규칙은 renderViewer() 가 생성하는 CSS 가 담당하고, 이 파일은 카드 외형만 정의한다.
+ */
+@use './variables' as *;
+
+.ddr-viewer > .ddr-item {
+  background: $drift-item-bg;
+  border: 1px solid $drift-item-border;
+  border-radius: $drift-radius;
+  padding: 8px;
+}

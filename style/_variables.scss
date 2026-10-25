@@ -1,0 +1,10 @@
+$drift-item-bg: #fff !default;
+$drift-item-border: #d0d7de !default;
+$drift-accent: #2563eb !default;
+$drift-danger: #dc2626 !default;
+$drift-radius: 6px !default;
+/* 배경 셀 격자 색 (CSS 변수 --ddr-grid-color 의 기본값) */
+$drift-grid-color: rgba(148, 163, 184, 0.35) !default;
+/* 타이틀(핸들) 영역 높이. Viewer 의 TITLE_HEIGHT(src/constants.ts)와 같게 유지한다 */
+$drift-title-height: 28px !default;
+$drift-touch-target: 44px !default;

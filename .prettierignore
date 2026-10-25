@@ -1,0 +1,4 @@
+**/*.md
+dist
+**/.git
+**/node_modules

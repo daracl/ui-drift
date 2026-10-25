@@ -1,0 +1,77 @@
+/** 그리드 셀 단위 위치/크기 */
+export interface DriftGeometry {
+  /** 가로 위치 (0 기반 컬럼) */
+  x: number;
+  /** 세로 위치 (0 기반 행) */
+  y: number;
+  /** 가로 크기 (컬럼 수) */
+  w: number;
+  /** 세로 크기 (행 수) */
+  h: number;
+}
+
+export type DriftPropValue = string | number | boolean | null;
+
+export interface DriftItem extends DriftGeometry {
+  /** 컴포넌트 고유 ID */
+  id: string;
+  minW?: number;
+  minH?: number;
+  maxW?: number;
+  maxH?: number;
+  /** true 이면 이동/리사이즈 불가(위치 고정), 다른 항목이 비켜간다 */
+  locked?: boolean;
+  /** false 이면 크기를 조절할 수 없다 (이동은 가능). 기본 true. locked 가 true 이면 무시되고 항상 고정이다 */
+  resizable?: boolean;
+  /** 컴포넌트 제목. Editor 에서는 상단 핸들 바에, Viewer 에서는 본문 위에 텍스트로 표시된다 */
+  title?: string;
+  /** 컴포넌트 콘텐츠 또는 렌더링 참조 정보 (Viewer 에서는 텍스트로 escape 된다) */
+  content?: string;
+  /** 사용자 정의 속성 (Viewer 에서는 data-* 속성으로 출력된다) */
+  props?: Record<string, DriftPropValue>;
+  /** breakpoint 이름별 위치/크기 재정의 */
+  responsive?: Record<string, DriftGeometry>;
+}
+
+export interface DriftBreakpoint {
+  /** breakpoint 이름 (responsive 키) */
+  name: string;
+  /** 이 너비(px) 이하에서 적용 (max-width) */
+  maxWidth: number;
+  /** 컬럼 수 */
+  columns: number;
+}
+
+export interface DriftLayout {
+  version: 1;
+  columns: number;
+  /** 행 높이(px) */
+  rowHeight: number;
+  /** 셀 간격(px) */
+  gap: number;
+  /** true 이면 놓은 위치를 유지한다(위로 자동 압축하지 않음). 겹칠 때만 아래로 밀린다. 기본 false */
+  float?: boolean;
+  /** 미지정이면 기본 breakpoint(tablet 8열, mobile 4열), 빈 배열이면 반응형 비활성 */
+  breakpoints?: DriftBreakpoint[];
+  items: DriftItem[];
+}
+
+export interface DriftValidationResult {
+  valid: boolean;
+  errors: string[];
+}
+
+/** 컨테이너 크기로부터 계산한 셀 크기 정보 */
+export interface DriftMetrics {
+  columns: number;
+  cellWidth: number;
+  rowHeight: number;
+  gap: number;
+}
+
+export interface DriftRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}

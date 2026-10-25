@@ -1,0 +1,130 @@
+# @daracl/drift
+
+GridStack 스타일의 Drag & Drop 레이아웃 모듈. **Editor** 는 JavaScript 로 배치/크기를 편집하고, **Viewer** 는 저장된 레이아웃을 **JavaScript 없이 CSS Grid 만으로** 표시한다.
+
+- 런타임 의존성 없음 (순수 TypeScript)
+- 데스크톱(마우스) + 모바일(터치) — Pointer Events
+- 충돌 시 자동 재배치(세로 중력, `float` 로 드롭 위치 유지 가능), 리사이즈, undo/redo, JSON 저장/복원
+- 반응형: breakpoint 별 컬럼 수와 위치/크기 재정의, 미지정 시 자동 변환
+- Viewer 번들은 Editor/DOM 코드를 포함하지 않는다 (빌드 산출물로 검증)
+
+설계 상세는 [docs/DESIGN.md](docs/DESIGN.md), API 는 [docs/API.md](docs/API.md) 를 본다.
+
+## 설치 / 빌드
+
+```bash
+npm install
+npm run build        # dist/ (ESM, CJS, UMD, d.ts, css)
+npm run example      # example/viewer.html + viewer.css 생성 (JavaScript 없는 Viewer)
+```
+
+패키지 entry
+
+| import | 내용 | 용도 |
+| --- | --- | --- |
+| `@daracl/drift` | core + viewer + editor | 편집 화면 |
+| `@daracl/drift/viewer` | core + 정적 HTML/CSS 생성 | **서버/빌드 타임** (DOM 불필요) |
+| `@daracl/drift/core` | 순수 레이아웃 엔진 | 계산/검증만 필요할 때 |
+| `@daracl/drift/dist/daracl.drift.css` | Editor 스타일 | 편집 화면 |
+
+## Editor
+
+```ts
+import { createDriftEditor } from '@daracl/drift';
+import '@daracl/drift/dist/daracl.drift.css';
+
+const editor = createDriftEditor('#editor', {
+  layout: { columns: 12, items: [{ id: 'a', x: 0, y: 0, w: 4, h: 2, content: 'Chart' }] },
+  removable: true,
+});
+
+editor.addItem({ id: 'b', w: 4, h: 2 });           // 빈 자리에 자동 배치
+editor.on('layoutChange', (layout, { reason }) => save(layout));
+const json = editor.toJSON();                        // 저장
+editor.fromJSON(json);                               // 복원
+editor.undo(); editor.redo();
+editor.destroy();                                    // 리스너/DOM 해제
+```
+
+배경은 모눈종이처럼 칸 경계를 따라 이어지는 격자선으로 표시된다(셀 간격이 있으면 선이 간격 중앙을 지난다). 색은 CSS 변수 `--ddr-grid-color`(예: `#editor{--ddr-grid-color:#9ca3af}`) 또는 `gridColor` 옵션, 기본은 얇은(0.5px) 반투명 선이다. 보이기/숨기기는 `grid: true|false` 옵션 또는 `editor.setGrid(bool)`.
+
+크기 조절 핸들은 카드 우하단(오른쪽/아래로)과 좌하단(왼쪽/아래로 — 오른쪽 가장자리는 고정되고 위치와 폭이 함께 바뀜) 두 곳이다. `resizeHandles: ['se']` 처럼 옵션으로 고를 수 있다.
+
+조작: 마우스는 카드 전체를 끌어 이동, 우하단 핸들로 리사이즈. **터치는 상단 핸들에서만 드래그**(카드 본문은 페이지 스크롤). 키보드: 방향키 이동, Shift+방향키 리사이즈, Delete 삭제(`removable`), Esc 취소/선택 해제.
+
+드롭 위치 유지: `createDriftEditor(el, { float: true })` 또는 `editor.setFloat(true)`. 기본(false)은 놓은 항목을 위로 자동 압축하고, `float` 는 놓은 자리에 그대로 두며 겹칠 때만 아래로 민다. 값은 레이아웃 JSON 의 `float` 에 저장되어 Viewer 도 같은 배치를 낸다.
+
+외부에서 끌어와 추가: `editor.setupDragIn('.palette .card')` 로 에디터 밖의 요소(팔레트 등)를 캔버스로 끌어다 놓아 추가한다. 크기/제목/내용은 원본의 `data-w`, `data-h`, `data-title`, `data-content` 또는 `item` 옵션으로 정한다. 마우스와 터치 모두 동작한다. 자세한 내용은 [docs/API.md](docs/API.md).
+
+반응형 편집: `editor.setBreakpoint('mobile')` 로 해당 breakpoint 를 편집하면 `item.responsive.mobile` 에만 저장된다. `'auto'` 는 컨테이너 폭으로 선택(옵션 `responsive: true` 와 같음), `null`(기본)은 폭이 바뀌어도 기본 레이아웃을 유지한다.
+
+## Viewer (JavaScript 없음)
+
+```ts
+import { renderViewer, renderViewerPage } from '@daracl/drift/viewer';
+
+const { html, css } = renderViewer(savedLayout);                       // 조각
+const page = renderViewerPage(savedLayout, { cssHref: '/layout.css' }); // 완성된 문서(스크립트 없음)
+```
+
+```html
+<div class="ddr-viewer">
+  <div class="ddr-item" data-drift-id="a" data-x="0" data-y="0" data-w="4" data-h="2"
+       data-bp0-w="3" data-bp1-w="4"><div class="ddr-title">Sales</div>Chart</div>
+</div>
+```
+
+```css
+.ddr-viewer{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));grid-auto-rows:40px;gap:8px}
+/* 위치/크기는 data 속성값으로 정해진다 (같은 값은 한 규칙을 공유) */
+.ddr-viewer>[data-x="0"]{grid-column-start:1}
+.ddr-viewer>[data-w="4"]{grid-column-end:span 4}
+.ddr-viewer>[data-y="0"]{grid-row-start:1}
+.ddr-viewer>[data-h="2"]{grid-row-end:span 2}
+@media (max-width:1024px){ /* 8열: data-bp0-* 가 달라진 값만 */
+  .ddr-viewer>[data-bp0-w="3"]{grid-column-end:span 3}
+}
+```
+
+항목의 위치/크기는 `style` 이 아니라 **`data-x`, `data-y`, `data-w`, `data-h`** 속성이 정한다(breakpoint 값은 큰 것부터 `data-bp0-*`, `data-bp1-*`). Editor 의 항목도 같은 속성을 갖고, 에디터가 만든 속성 선택자 CSS(`[data-x="3"]{left:…}`)가 배치한다.
+
+- 출력에 `<script>`, `on*` 속성, 인라인 `style` 이 없어 CSP(`script-src 'none'`)에서 동작한다. 외부 CSS 파일(`cssHref`) 또는 `nonce` 인라인 `<style>` 선택.
+- `content`/`props`/`id` 는 항상 escape. 신뢰된 HTML 은 `renderContent` 콜백으로만.
+- 여러 레이아웃을 한 페이지에 둘 때는 `scope` 옵션으로 클래스를 분리한다.
+- 미디어 쿼리는 **뷰포트 기준**이다(Editor 의 breakpoint 는 컨테이너 폭 기준).
+
+## 레이아웃 데이터
+
+```json
+{
+  "version": 1, "columns": 12, "rowHeight": 40, "gap": 8, "float": false,
+  "breakpoints": [{ "name": "tablet", "maxWidth": 1024, "columns": 8 }, { "name": "mobile", "maxWidth": 640, "columns": 4 }],
+  "items": [
+    { "id": "a", "x": 0, "y": 0, "w": 4, "h": 2, "minW": 2, "maxW": 8, "title": "Sales", "locked": false, "resizable": true, "content": "Chart",
+      "props": { "kind": "chart" }, "responsive": { "mobile": { "x": 0, "y": 0, "w": 4, "h": 3 } } }
+  ]
+}
+```
+
+`title` 은 Editor 에서는 카드 상단 핸들 바(드래그 영역)에, Viewer 에서는 본문 위 `.ddr-title` 로 표시된다(항상 텍스트로 escape).
+
+Editor 가 `getLayout()/toJSON()` 으로 내보낸 데이터를 Viewer 가 그대로 입력으로 받는다.
+
+## 테스트
+
+```bash
+npm test                 # Jest (core, viewer, editor(jsdom), dist 번들 검사). dist 검사는 build 후 실행됨
+npm run pwtest           # Playwright (데스크톱 마우스, 모바일 터치, JS 비활성 Viewer, CSP, Editor↔Viewer 일치)
+npx playwright install chromium   # 최초 1회
+npm run dev              # uitest/editor.html 수동 확인 (http://127.0.0.1:5179)
+                         #  - 항목을 선택하고 상단 패널의 locked / resizable 을 체크하면 바로 적용된다
+                         #  - 팔레트(+ Chart 등)를 캔버스로 끌어다 놓아 추가, float/격자 토글, breakpoint 선택
+```
+
+## 알려진 제약
+
+[docs/DESIGN.md §8](docs/DESIGN.md) 참고 (세로 중력만, nested grid/외부 드래그 인 없음, 고정 행 높이 등).
+
+## License
+
+MIT

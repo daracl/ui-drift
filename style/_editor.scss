@@ -1,0 +1,266 @@
+@use 'sass:color';
+@use './variables' as *;
+
+.ddr-editor {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  overflow-x: hidden;
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  .daracl-drift {
+    position: relative;
+    width: 100%;
+    min-height: 80px;
+
+    /* 배경 모눈종이 격자: 색은 CSS 변수 --ddr-grid-color 로 바꾼다.
+       (data: SVG 안에서는 CSS 변수를 쓸 수 없으므로 SVG 는 마스크로, 색은 background-color 로 칠한다.
+       캔버스 자체에 mask 를 걸면 카드까지 가려지므로 ::before 에만 적용한다) */
+    /* 바깥 테두리 (모눈종이의 외곽선) */
+    &.ddr-grid {
+      box-shadow: inset 0 0 0 1px var(--ddr-grid-color, #{$drift-grid-color});
+    }
+
+    &.ddr-grid::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background-color: var(--ddr-grid-color, #{$drift-grid-color});
+      -webkit-mask-image: var(--ddr-grid-mask);
+      mask-image: var(--ddr-grid-mask);
+      -webkit-mask-size: var(--ddr-grid-size);
+      mask-size: var(--ddr-grid-size);
+      -webkit-mask-repeat: repeat;
+      mask-repeat: repeat;
+      -webkit-mask-position: var(--ddr-grid-offset, 0) var(--ddr-grid-offset, 0);
+      mask-position: var(--ddr-grid-offset, 0) var(--ddr-grid-offset, 0);
+    }
+  }
+
+  .ddr-item {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    background: $drift-item-bg;
+    border: 1px solid $drift-item-border;
+    border-radius: $drift-radius;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    /* 위치/크기는 data-x/y/w/h 속성 선택자 CSS 로 정해지므로 left/top/width/height 를 전환한다 */
+    transition: left 0.15s ease, top 0.15s ease, width 0.15s ease, height 0.15s ease, box-shadow 0.15s ease;
+    cursor: grab;
+    outline: none;
+
+    &:focus-visible {
+      outline: 2px solid $drift-accent;
+      outline-offset: 1px;
+    }
+
+    &.ddr-selected {
+      border-color: $drift-accent;
+      box-shadow: 0 0 0 2px color.change($drift-accent, $alpha: 0.25);
+    }
+
+    &.ddr-locked {
+      cursor: default;
+      background: #f6f8fa;
+    }
+
+    &.ddr-dragging,
+    &.ddr-resizing {
+      z-index: 10;
+      transition: none;
+      opacity: 0.9;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+    }
+
+    &.ddr-dragging {
+      cursor: grabbing;
+    }
+  }
+
+  .ddr-handle {
+    flex: 0 0 auto;
+    height: $drift-title-height;
+    cursor: grab;
+    border-bottom: 1px solid $drift-item-border;
+    /* 핸들에서만 브라우저 스크롤/줌 제스처를 막아 터치 드래그를 받는다 */
+    touch-action: none;
+
+    /* 제목이 없으면 그립 표시만 */
+    &.ddr-handle-empty {
+      background: repeating-linear-gradient(90deg, transparent 0 6px, rgba(0, 0, 0, 0.18) 6px 8px) center / 24px 2px
+        no-repeat;
+    }
+  }
+
+  .ddr-title {
+    display: block;
+    padding: 0 28px 0 8px;
+    overflow: hidden;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: $drift-title-height;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .ddr-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 8px;
+    overflow: auto;
+    /* 본문은 터치 스크롤이 그대로 동작한다 */
+    touch-action: pan-x pan-y;
+  }
+
+  .ddr-remove {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: $drift-danger;
+    font-size: 18px;
+    line-height: 24px;
+    cursor: pointer;
+  }
+
+  .ddr-resize-handle {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 18px;
+    height: 18px;
+    cursor: nwse-resize;
+    touch-action: none;
+    background: linear-gradient(
+      135deg,
+      transparent 50%,
+      rgba(0, 0, 0, 0.35) 50% 58%,
+      transparent 58% 70%,
+      rgba(0, 0, 0, 0.35) 70% 78%,
+      transparent 78%
+    );
+  }
+
+  .ddr-placeholder {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+    pointer-events: none;
+    border: 2px dashed $drift-accent;
+    border-radius: $drift-radius;
+    background: color.change($drift-accent, $alpha: 0.12);
+    transition: left 0.12s ease, top 0.12s ease, width 0.12s ease, height 0.12s ease;
+
+    &[hidden] {
+      display: none;
+    }
+
+    &.ddr-placeholder-invalid {
+      border-color: $drift-danger;
+      background: color.change($drift-danger, $alpha: 0.12);
+    }
+  }
+
+  &.ddr-no-animate {
+    .ddr-item,
+    .ddr-placeholder {
+      transition: none;
+    }
+  }
+
+  &.ddr-drag-disabled .ddr-item,
+  &.ddr-drag-disabled .ddr-handle {
+    cursor: default;
+  }
+
+  /* 좌하단 핸들: 왼쪽에서 크기를 조절한다 (우하단 모양을 좌우 반전) */
+  .ddr-resize-handle[data-dir='sw'] {
+    right: auto;
+    left: 0;
+    cursor: nesw-resize;
+    background: linear-gradient(
+      225deg,
+      transparent 50%,
+      rgba(0, 0, 0, 0.35) 50% 58%,
+      transparent 58% 70%,
+      rgba(0, 0, 0, 0.35) 70% 78%,
+      transparent 78%
+    );
+  }
+
+  .ddr-item.ddr-no-resize .ddr-resize-handle,
+  &.ddr-resize-disabled .ddr-resize-handle {
+    display: none;
+  }
+}
+
+/* 외부에서 끌어오기: 원본은 터치 스크롤이 드래그를 가로채지 않게 하고, 복제본이 포인터를 따라간다.
+   복제본은 body 에 붙으므로 .ddr-editor 밖에 정의한다 */
+.ddr-dragin-source {
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.ddr-dragin-ghost {
+  position: fixed;
+  z-index: 2147483000;
+  margin: 0;
+  box-sizing: border-box;
+  pointer-events: none;
+  opacity: 0.85;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.ddr-editor.ddr-dragin-over .daracl-drift {
+  outline: 2px dashed $drift-accent;
+  outline-offset: -2px;
+}
+
+/* 터치 기기: 핸들/리사이즈 대상을 손가락 크기로 키운다 */
+@media (pointer: coarse) {
+  .ddr-editor {
+    .ddr-resize-handle {
+      width: 28px;
+      height: 28px;
+
+      /* 시각적 크기는 유지하면서 터치 영역을 최소 44px 로 확장 */
+      &::after {
+        content: '';
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        width: $drift-touch-target;
+        height: $drift-touch-target;
+      }
+
+      &[data-dir='sw']::after {
+        right: auto;
+        left: 0;
+      }
+    }
+
+    .ddr-remove {
+      width: 36px;
+      height: 36px;
+      line-height: 36px;
+    }
+  }
+}

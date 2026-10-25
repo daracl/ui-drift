@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="ko">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ui-drift editor</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 12px;
+      font-family: system-ui, sans-serif;
+      background: #f3f4f6;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .toolbar button,
+    .toolbar select {
+      min-height: 36px;
+      padding: 0 10px;
+    }
+
+    #editor {
+      background: #fff;
+      border: 1px dashed #cbd5e1;
+      padding: 0;
+    }
+
+    textarea {
+      width: 100%;
+      height: 120px;
+      margin-top: 8px;
+      font-family: monospace;
+    }
+
+    .palette { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+    .pal { padding: 10px 14px; background: #fff; border: 1px solid #94a3b8; border-radius: 6px; font-size: 13px; }
+
+    /* 항목 옵션 패널: 선택한 항목의 locked / resizable 을 바로 적용한다 */
+    .item-options { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 8px; padding: 8px 12px; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; }
+    .item-options .name { font-weight: 600; min-width: 130px; }
+    .item-options .name.none { color: #94a3b8; font-weight: 400; }
+    .item-options label { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; }
+    .item-options label.off { color: #94a3b8; }
+    .item-options .hint { color: #64748b; font-size: 12px; }
+
+    #log {
+      font-size: 12px;
+      color: #475569;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+
+<body>
+  <h3>ui-drift Editor</h3>
+  <div class="toolbar">
+    <button id="add">추가</button>
+    <button id="remove">선택 삭제</button>
+    <button id="undo">undo</button>
+    <button id="redo">redo</button>
+    <button id="reset">초기화</button>
+    <button id="save">저장</button>
+    <button id="export">JSON 내보내기</button>
+    <button id="import">JSON 불러오기</button>
+    <select id="bp">
+      <option value="">desktop</option>
+      <option value="auto">auto (컨테이너 폭)</option>
+      <option value="tablet">tablet</option>
+      <option value="mobile">mobile</option>
+    </select>
+    <label><input type="checkbox" id="float"> float (드롭 위치 유지)</label>
+    <label><input type="checkbox" id="grid" checked> 격자 표시</label>
+  </div>
+  <!-- 항목 옵션: 에디터에서 항목을 선택한 뒤 체크하면 바로 적용된다 -->
+  <div class="item-options" id="itemOptions">
+    <span class="name none" id="optName">항목을 선택하세요</span>
+    <label id="lblLocked"><input type="checkbox" id="optLocked" disabled> locked (위치 고정: 이동/리사이즈 불가)</label>
+    <label id="lblResizable"><input type="checkbox" id="optResizable" disabled checked> resizable (크기 조절 가능)</label>
+    <span class="hint" id="optHint">locked 이면 resizable 은 무시됩니다.</span>
+  </div>
+  <!-- 끌어서 추가: 이 요소들을 아래 에디터로 끌어다 놓는다 -->
+  <div class="palette" id="palette">
+    <div class="pal" data-w="3" data-h="2" data-title="Chart" data-content="New chart">+ Chart (3x2)</div>
+    <div class="pal" data-w="4" data-h="3" data-title="Table" data-content="New table">+ Table (4x3)</div>
+    <div class="pal" data-w="2" data-h="2">+ Small (2x2)</div>
+  </div>
+  <div id="editor"></div>
+  <div id="log"></div>
+  <textarea id="json" aria-label="layout json"></textarea>
+
+  <script type="module">
+    import '/style/daracl.drift.scss';
+    import { createDriftEditor } from '/src/index.ts';
+
+    const editor = createDriftEditor('#editor', {
+      layout: {
+        columns: 24,
+        rowHeight: 30,
+        items: [
+          { id: 'a', x: 0, y: 0, w: 4, h: 3, content: 'Chart A', title: "test1" },
+          { id: 'b', x: 4, y: 0, w: 4, h: 3, content: 'Chart B' },
+          { id: 'c', x: 8, y: 0, w: 4, h: 3, content: 'Map' },
+          { id: 'd', x: 0, y: 3, w: 8, h: 3, content: 'Table', props: { kind: 'table' } },
+          { id: 'e', x: 8, y: 3, w: 4, h: 3, content: 'Notes' },
+        ],
+      },
+      removable: true,
+    });
+    window.editor = editor;
+    editor.setupDragIn('.pal');
+
+    const log = document.getElementById('log');
+    editor.on('layoutChange', (layout, info) => {
+      log.textContent = `layoutChange: ${info.reason} (${layout.items.length} items)`;
+    });
+
+    // ── 항목 옵션 패널: 선택한 항목의 locked / resizable 을 체크박스로 바로 적용 ──
+    const optName = document.getElementById('optName');
+    const optLocked = document.getElementById('optLocked');
+    const optResizable = document.getElementById('optResizable');
+    const lblResizable = document.getElementById('lblResizable');
+
+    function syncOptions() {
+      const sel = editor.getSelected();
+      optName.classList.toggle('none', !sel);
+      optName.textContent = sel ? `선택: ${sel.id}${sel.title ? ' (' + sel.title + ')' : ''}` : '항목을 선택하세요';
+      optLocked.disabled = !sel;
+      optResizable.disabled = !sel;
+      optLocked.checked = !!(sel && sel.locked);
+      optResizable.checked = !sel || sel.resizable !== false;
+      // locked 이면 resizable 은 의미가 없으므로 흐리게 표시한다
+      lblResizable.classList.toggle('off', !!(sel && sel.locked));
+    }
+    editor.on('select', syncOptions);
+    editor.on('layoutChange', syncOptions); // undo/redo/불러오기 등으로 값이 바뀐 경우에도 맞춘다
+
+    // true 일 때만 속성을 저장하고, 기본값으로 돌아가면 속성을 제거한다 (JSON 이 깔끔하게 유지됨)
+    optLocked.onchange = () => {
+      const sel = editor.getSelected();
+      if (sel) editor.updateItem(sel.id, { locked: optLocked.checked ? true : undefined });
+    };
+    optResizable.onchange = () => {
+      const sel = editor.getSelected();
+      if (sel) editor.updateItem(sel.id, { resizable: optResizable.checked ? undefined : false });
+    };
+    syncOptions();
+
+    let seq = 0;
+    const $ = (id) => document.getElementById(id);
+    $('add').onclick = () => editor.addItem({ id: `n${++seq}`, w: 3, h: 2, content: `New ${seq}` });
+    $('remove').onclick = () => { const s = editor.getSelected(); if (s) editor.removeItem(s.id); };
+    $('undo').onclick = () => editor.undo();
+    $('redo').onclick = () => editor.redo();
+    $('reset').onclick = () => editor.reset();
+    $('save').onclick = () => editor.save();
+    $('export').onclick = () => { $('json').value = editor.toJSON(2); };
+    $('import').onclick = () => editor.fromJSON($('json').value);
+    $('grid').onchange = (e) => editor.setGrid(e.target.checked);
+    $('float').onchange = (e) => editor.setFloat(e.target.checked);
+    $('bp').onchange = (e) => editor.setBreakpoint(e.target.value === '' ? null : e.target.value);
+  </script>
+</body>
+
+</html>

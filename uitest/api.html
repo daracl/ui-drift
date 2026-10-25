@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ui-drift api harness</title>
+    <style>
+      body { margin: 0; font-family: system-ui, sans-serif; }
+      #host { width: 100%; }
+      .box { margin-bottom: 16px; }
+    </style>
+  </head>
+  <body>
+    <!-- 자동화 테스트용 하네스: window.Drift 로 라이브러리 전체를 노출한다 -->
+    <div id="host"></div>
+    <script type="module">
+      import '/style/daracl.drift.scss';
+      import * as Drift from '/src/index.ts';
+      window.Drift = Drift;
+      window.__ready = true;
+    </script>
+  </body>
+</html>
