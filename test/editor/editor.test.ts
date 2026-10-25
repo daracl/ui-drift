@@ -120,7 +120,11 @@ describe('DriftEditor', () => {
       const added = editor.addItem({ id: 'd', w: 4, h: 2, content: 'D' });
       expect(added).toMatchObject({ x: 8, y: 0 });
       expect(onAdd).toHaveBeenCalledWith(expect.objectContaining({ id: 'd' }));
-      expect(onChange).toHaveBeenCalledWith(expect.anything(), { reason: 'add' });
+      // 기존 인자(레이아웃, {reason})는 그대로이고 info 에 source/changes 가 추가되었다
+      expect(onChange).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ reason: 'add', source: 'api' }),
+      );
       expect(el('d')).toBeTruthy();
       expect(() => editor.addItem({ id: 'd', w: 1, h: 1 })).toThrow();
     });

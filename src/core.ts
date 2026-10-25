@@ -1,4 +1,5 @@
 export { compact } from './core/compact';
+export { diffItems, itemsEqual, layoutsEqual } from './core/diff';
 export {
   clamp,
   collides,
@@ -7,12 +8,13 @@ export {
   findCollisions,
   firstCollision,
   getRowCount,
+  hasOverlap,
   normalizeItem,
   toGridPosition,
   toGridSize,
   toPixelRect,
 } from './core/geometry';
-export { cloneLayout, createLayout, parseLayout, serializeLayout, validateLayout } from './core/layout';
+export { cloneLayout, createLayout, parseLayout, sanitizeItem, serializeLayout, validateLayout } from './core/layout';
 export {
   addItem,
   findFreePosition,
@@ -35,8 +37,10 @@ export {
 } from './constants';
 export type {
   DriftBreakpoint,
+  DriftChanges,
   DriftGeometry,
   DriftItem,
+  DriftItemChange,
   DriftLayout,
   DriftMetrics,
   DriftPropValue,

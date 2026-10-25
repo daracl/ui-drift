@@ -40,7 +40,10 @@
     }
 
     .palette { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
-    .pal { padding: 10px 14px; background: #fff; border: 1px solid #94a3b8; border-radius: 6px; font-size: 13px; }
+    .pal, .pal-ext { padding: 10px 14px; background: #fff; border: 1px solid #94a3b8; border-radius: 6px; font-size: 13px; }
+    .pal-ext { border-style: dashed; border-color: #2563eb; }
+    .ext-info { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 12px; color: #475569; }
+    #dropLog { font-family: monospace; word-break: break-all; }
 
     /* 항목 옵션 패널: 선택한 항목의 locked / resizable 을 바로 적용한다 */
     .item-options { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 8px; padding: 8px 12px; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; }
@@ -90,6 +93,12 @@
     <div class="pal" data-w="3" data-h="2" data-title="Chart" data-content="New chart">+ Chart (3x2)</div>
     <div class="pal" data-w="4" data-h="3" data-title="Table" data-content="New table">+ Table (4x3)</div>
     <div class="pal" data-w="2" data-h="2">+ Small (2x2)</div>
+    <!-- autoAdd:false: Drift 는 드롭 정보만 전달하고, 항목 추가는 호출자(외부 모델)가 처리한다 -->
+    <div class="pal-ext" data-w="3" data-h="2" data-title="External" data-content="외부 모델이 추가">+ External (autoAdd:false)</div>
+  </div>
+  <div class="ext-info">
+    <label><input type="checkbox" id="extAdd" checked> onDrop 에서 addItem() 호출 (끄면 드롭 정보만 기록)</label>
+    <span id="dropLog">onDrop: -</span>
   </div>
   <div id="editor"></div>
   <div id="log"></div>
@@ -164,6 +173,16 @@
     $('import').onclick = () => editor.fromJSON($('json').value);
     $('grid').onchange = (e) => editor.setGrid(e.target.checked);
     $('float').onchange = (e) => editor.setFloat(e.target.checked);
+    // ── 외부 모델이 상태를 관리하는 환경 시뮬레이션 (ReportStudio 등) ──
+    // autoAdd:false 이면 Drift 는 내부 레이아웃을 바꾸지 않고 드롭 결과(onDrop)만 전달한다.
+    // 호출자는 자기 모델을 갱신한 뒤 필요하면 editor.addItem() 으로 화면에 반영한다 (콜백 안에서 동기 호출해도 안전).
+    editor.setupDragIn('.pal-ext', {
+      autoAdd: false,
+      onDrop: ({ item, breakpoint, columns }) => {
+        $('dropLog').textContent = `onDrop: ${JSON.stringify(item)} (breakpoint=${breakpoint ?? 'desktop'}, columns=${columns})`;
+        if ($('extAdd').checked) editor.addItem({ ...item, id: `ext-${++seq}` });
+      },
+    });
     $('bp').onchange = (e) => editor.setBreakpoint(e.target.value === '' ? null : e.target.value);
   </script>
 </body>

@@ -139,7 +139,7 @@ export function parseLayout(input: string | unknown): DriftLayout {
 
   const raw = data as Partial<DriftLayout>;
   const base = createLayout({ ...raw, items: [] });
-  const items = sanitizeItems(raw.items).map((item) => cleanItem(item));
+  const items = sanitizeItems(raw.items).map((item) => sanitizeItem(item));
   const layout = { ...base, items: normalizeItems(items, base.columns, base.float === true) };
   const breakpoints = sanitizeBreakpoints(raw.breakpoints);
   if (breakpoints) layout.breakpoints = breakpoints;
@@ -155,8 +155,11 @@ function sanitizeBreakpoints(value: unknown): DriftBreakpoint[] | undefined {
     .map((bp) => ({ name: bp.name, maxWidth: bp.maxWidth, columns: bp.columns }));
 }
 
-/** 알려진 필드만 남기고 형식이 잘못된 값은 버린다 */
-function cleanItem(raw: DriftItem): DriftItem {
+/**
+ * 알려진 필드만 남기고 형식이 잘못된 값은 버린다. 입력을 변경하지 않고 새 객체를 반환한다.
+ * (위치/크기 값은 정규화하지 않는다. normalizeItem 으로 별도 보정한다)
+ */
+export function sanitizeItem(raw: DriftItem): DriftItem {
   const item: DriftItem = { id: raw.id, x: raw.x, y: raw.y, w: raw.w, h: raw.h };
   for (const key of ['minW', 'minH', 'maxW', 'maxH'] as const) {
     if (typeof raw[key] === 'number' && Number.isFinite(raw[key])) item[key] = raw[key];

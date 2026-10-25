@@ -1,7 +1,7 @@
 import { addItem } from '@/core/operations';
 import { normalizeItem, toGridPosition, toPixelRect } from '@/core/geometry';
 import { DriftItem } from '@t/DriftLayout';
-import type { DriftDragInOptions, DriftDragInSource } from '@t/DriftEditor';
+import type { DriftDragInDropResult, DriftDragInItem, DriftDragInOptions, DriftDragInSource } from '@t/DriftEditor';
 import type { DriftEditor } from './DriftEditor';
 import type { DriftItemInput } from '@/core/operations';
 import { CLS } from './classNames';
@@ -31,6 +31,8 @@ interface Session {
   lastKey: string;
   over: boolean;
   cell: { x: number; y: number };
+  /** 미리보기에서 계산된 최종 위치/크기 (충돌 재배치, float, min/max 반영). 캔버스 밖이면 없다 */
+  placed?: DriftItem;
   clientX: number;
   clientY: number;
 }
@@ -212,6 +214,7 @@ export class DragInController {
       if (s.over) {
         // 캔버스를 벗어나면 미리보기를 걷어내고 원래 배치로 되돌린다
         s.over = false;
+        s.placed = undefined;
         s.lastKey = '';
         placeholder.hidden = true;
         editor.renderItems(s.snapshot);
@@ -251,6 +254,7 @@ export class DragInController {
 
     const preview = addItem(s.snapshot, columns, { ...input, id: TEMP_ID, x, y: cell.y }, editor.isFloat());
     const placed = preview.find((item) => item.id === TEMP_ID) as DriftItem;
+    s.placed = placed;
     placeholder.hidden = false;
     placeholder.classList.remove(CLS.placeholderInvalid);
     editor.applyRect(placeholder, placed);
@@ -262,16 +266,61 @@ export class DragInController {
   private onUp(e: PointerEvent): void {
     const s = this.session;
     if (!s || e.pointerId !== s.pointerId) return;
-    const { active, over, cell, input } = s;
+
+    // 놓는 순간의 포인터 위치로 최종 위치/크기를 한 번 더 확정한다 (마지막 move 이후 이동이 있을 수 있다)
+    if (s.active) {
+      s.clientX = e.clientX;
+      s.clientY = e.clientY;
+      this.update(s);
+    }
+    const { active, over, placed, input, el, entry } = s;
+    // 콜백/추가 전에 ghost, placeholder, 밀려난 항목의 미리보기를 먼저 정리한다.
+    // (이후 정리 코드가 없으므로 콜백 안에서 addItem() 을 호출해도 그 결과를 덮어쓰지 않는다)
     this.finish(s);
     if (!active) return;
 
-    if (!over || !input) {
+    if (!over || !placed || !input) {
       this.editor.emit('dragInEnd', null);
       return;
     }
-    const added = this.editor.addItem({ ...input, id: this.uniqueId(input.id), x: cell.x, y: cell.y });
-    this.editor.emit('dragInEnd', added);
+
+    const { autoAdd, onDrop } = entry.options;
+    if (autoAdd === false) {
+      // 내부 상태는 건드리지 않고 드롭 결과만 전달한다. 실제로 추가된 항목이 없으므로 dragInEnd 는 null
+      try {
+        onDrop?.(this.result(el, input, placed));
+      } finally {
+        this.editor.emit('dragInEnd', null);
+      }
+      return;
+    }
+
+    // 사용자가 끌어다 놓은 변경이므로 출처는 'user' 이다
+    const added = this.editor.addItem(
+      { ...input, id: this.uniqueId(input.id), x: placed.x, y: placed.y },
+      { source: 'user' },
+    );
+    try {
+      onDrop?.(this.result(el, { ...input, id: added.id }, added));
+    } finally {
+      this.editor.emit('dragInEnd', added);
+    }
+  }
+
+  /** onDrop 에 전달할 결과를 만든다. 내부 상태와 분리된 깊은 복사본이다 */
+  private result(source: HTMLElement, input: DriftItemInput, geo: DriftItem): DriftDragInDropResult {
+    const item = JSON.parse(JSON.stringify(input)) as DriftDragInItem;
+    if (!item.id) delete item.id;
+    item.x = geo.x;
+    item.y = geo.y;
+    item.w = geo.w;
+    item.h = geo.h;
+    return {
+      source,
+      item: item as DriftDragInDropResult['item'],
+      breakpoint: this.editor.getBreakpoint()?.name ?? null,
+      columns: this.editor.getColumns(),
+    };
   }
 
   private onCancel(e: PointerEvent): void {

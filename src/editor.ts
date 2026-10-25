@@ -1,8 +1,12 @@
 export { DriftEditor, createDriftEditor } from './editor/DriftEditor';
 export type { DriftItemPatch } from './editor/DriftEditor';
 export type {
+  DriftApplyOptions,
   DriftChangeInfo,
   DriftChangeReason,
+  DriftChangeSource,
+  DriftContentLifecycle,
+  DriftDragInDropResult,
   DriftDragInItem,
   DriftDragInOptions,
   DriftDragInSource,
@@ -10,4 +14,9 @@ export type {
   DriftEditorEvents,
   DriftEditorOptions,
   DriftResizeHandle,
+  DriftSizeChange,
+  DriftSizeNotify,
+  DriftSyncItem,
+  DriftSyncOptions,
+  DriftSyncResult,
 } from './types/DriftEditor';

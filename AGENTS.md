@@ -96,6 +96,14 @@ types → core → viewer
 - `responsive` 옵션은 기본 `false`(컨테이너 폭이 바뀌어도 기본 레이아웃 유지). 자동 breakpoint 전환은 `responsive: true` 또는 `setBreakpoint('auto')`.
 - `layout` 과 옵션 우선순위: `layout` 값(columns/rowHeight/gap/breakpoints/float:true)이 옵션보다 우선하며, `layout` 에 float 가 없을 때만 `options.float` 가 적용된다.
 - 배경 모눈종이: 캔버스 `::before` 에 SVG 마스크(`--ddr-grid-mask/size/offset`)를 적용하고 색은 CSS 변수 `--ddr-grid-color`(기본 반투명). 옵션 `grid`/`gridColor`, `setGrid()`. 색 옵션은 안전한 문자만 허용한다.
+- 외부 모델 연동(`history`/`keyboard`/`programmaticEvents`, `source`, `info.changes`, `syncItems`, `contentLifecycle`, `sizeChange`): 상세는 `docs/API.md` 와 `docs/DESIGN.md §8`. 지켜야 할 점:
+  - 모델 변경은 반드시 `commit()` → `replace()` 를 거친다. 변경 비교(`layoutsEqual`)는 구조 비교이며 같으면 아무것도 하지 않는다. 사용자 조작 경로(`PointerController`/`DragInController`/키보드/삭제 버튼)는 `{ source: 'user' }` 를 넘긴다.
+  - `layoutChange` 의 `changes`/복사본은 **리스너가 있을 때만** 만든다(`emitter.has`). 이벤트 데이터는 항상 복사본이다.
+  - 콘텐츠 변경 감지는 `ContentState`(title/content/props 참조, props JSON)로 한다. 위치/크기/선택 변경에서 콘텐츠 훅이나 `renderItem` 이 호출되면 안 된다. 훅은 DOM 을 비우거나 지우기 **전에** `unmount` 한다(`unmountContent` 가 중복 호출을 막는다).
+  - 크기 알림은 `flushSizes()` 가 마지막으로 알린 크기와 비교해 프레임당 한 번 발생시킨다. `destroy()` 는 예약된 프레임을 취소해야 한다. 크기는 DOM 을 읽지 않고 메트릭으로 계산한다.
+  - `Esc` 취소(드래그/리사이즈/외부 끌어오기)는 `keyboard:false` 와 무관해야 한다. 항목 키 처리(`onKey`)만 `isKeyboard()` 로 막는다.
+- 성능: `core/compact.ts` 의 `ColumnIndex` 는 선형 탐색 구현과 **결과가 같아야** 한다(`test/core/compactEquivalence.test.ts` 가 참조 구현과 비교). 압축/충돌 로직을 바꾸면 이 테스트와 `npm run bench:core` 를 함께 돌리고 `docs/performance.md` 를 갱신한다. jsdom 시간은 성능 지표로 쓰지 않는다.
+- 외부 끌어오기 `autoAdd:false`/`onDrop`: drop 시 `finish()`(정리·복원)를 **먼저** 하고 그 뒤에 콜백을 호출한다. 콜백 이후에 모델/DOM 을 건드리는 정리 코드를 추가하지 않는다(콜백 안의 동기 `addItem()` 결과를 덮어쓰게 된다). 전달 항목은 JSON 깊은 복사본이며 `dragInEnd` 는 `autoAdd:false` 에서 항상 `null`.
 - 외부 끌어오기(`setupDragIn`): `DragInController` 가 document 단위 Pointer 리스너 하나로 처리한다. 미리보기는 임시 id 로 `addItem` 을 계산해 placeholder/기존 항목 위치만 갱신하고, 모델은 drop 시 `editor.addItem({x,y})` 한 번으로 바꾼다. breakpoint 편집 중 `addItem` 은 기본 레이아웃에 자동 위치로 추가하고 해당 breakpoint 에서 `moveItem` 한 번의 커밋으로 처리한다.
 - 리소스 해제: 모든 리스너는 `AbortController` signal 로 등록하고 `destroy()` 가 리스너, `ResizeObserver`, 위치 스타일시트, DOM 을 정리한다.
 
@@ -131,7 +139,7 @@ types → core → viewer
 - 공개 옵션/API 를 바꾸면 `src/types/DriftEditor.d.ts`, `docs/API.md`, `README.md`, 필요 시 `docs/DESIGN.md` 를 같이 갱신한다. `test/build/distConsumer.test.ts` 가 `docs/API.md` 의 표(Editor 메서드, Core/Viewer 함수, 이벤트 이름)와 실제 구현의 일치를 검사하므로 표의 첫 칸 형식(`` `name(` ``)을 유지한다.
 - 타이틀 영역 높이는 `$drift-title-height`(SCSS)와 `TITLE_HEIGHT`(`src/constants.ts`)가 같아야 한다.
 - 스타일시트 생성 로직(`GeometryStyle`)에 `data-*` 값을 CSS 에 넣을 때는 숫자만 쓴다. 사용자 문자열을 CSS/SVG 에 직접 넣지 않는다.
-- `docs/DESIGN.md §8` 의 알려진 제약(세로 방향만, nested grid 없음, 고정 행 높이, Viewer `@media` 는 뷰포트 기준)을 바꾸는 작업이면 문서를 함께 고친다.
+- `docs/DESIGN.md §9` 의 알려진 제약(세로 방향만, nested grid 없음, 고정 행 높이, Viewer `@media` 는 뷰포트 기준)을 바꾸는 작업이면 문서를 함께 고친다.
 
 ## 8. Build & Test Commands
 

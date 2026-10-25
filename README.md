@@ -54,7 +54,11 @@ editor.destroy();                                    // 리스너/DOM 해제
 
 드롭 위치 유지: `createDriftEditor(el, { float: true })` 또는 `editor.setFloat(true)`. 기본(false)은 놓은 항목을 위로 자동 압축하고, `float` 는 놓은 자리에 그대로 두며 겹칠 때만 아래로 민다. 값은 레이아웃 JSON 의 `float` 에 저장되어 Viewer 도 같은 배치를 낸다.
 
-외부에서 끌어와 추가: `editor.setupDragIn('.palette .card')` 로 에디터 밖의 요소(팔레트 등)를 캔버스로 끌어다 놓아 추가한다. 크기/제목/내용은 원본의 `data-w`, `data-h`, `data-title`, `data-content` 또는 `item` 옵션으로 정한다. 마우스와 터치 모두 동작한다. 자세한 내용은 [docs/API.md](docs/API.md).
+외부에서 끌어와 추가: `editor.setupDragIn('.palette .card')` 로 에디터 밖의 요소(팔레트 등)를 캔버스로 끌어다 놓아 추가한다. 크기/제목/내용은 원본의 `data-w`, `data-h`, `data-title`, `data-content` 또는 `item` 옵션으로 정한다. 마우스와 터치 모두 동작한다.
+
+외부 모델 연동: 외부 모델이 undo/redo 와 컴포넌트를 관리한다면 `history:false`, `keyboard:false`, `programmaticEvents:false` 로 겹치는 기능을 개별로 끄고, `layoutChange` 의 `info.source`(user/api/sync)와 `info.changes`(추가·제거·변경 항목의 before/after, 충돌로 밀려난 항목 포함)로 변경을 받으며, `syncItems()` 로 모델을 id 기준으로 한 번에 반영하고, `contentLifecycle` 로 Grid/Chart 같은 외부 위젯의 생성·갱신·해제를, `sizeChange` 로 위젯의 `resize()` 시점을 받는다. 자세한 내용은 [docs/API.md](docs/API.md)("외부 모델 연동" 절), 성능 측정은 [docs/performance.md](docs/performance.md).
+
+외부 모델(예: ReportStudio)이 상태를 관리한다면 `setupDragIn(source, { autoAdd: false, onDrop })` 로 Drift 는 최종 위치·크기만 전달하게 하고 호출자가 직접 추가한다(`onDrop` 안에서 `editor.addItem()` 을 동기 호출해도 안전). 자세한 내용은 [docs/API.md](docs/API.md).
 
 반응형 편집: `editor.setBreakpoint('mobile')` 로 해당 breakpoint 를 편집하면 `item.responsive.mobile` 에만 저장된다. `'auto'` 는 컨테이너 폭으로 선택(옵션 `responsive: true` 와 같음), `null`(기본)은 폭이 바뀌어도 기본 레이아웃을 유지한다.
 
@@ -123,7 +127,7 @@ npm run dev              # uitest/editor.html 수동 확인 (http://127.0.0.1:51
 
 ## 알려진 제약
 
-[docs/DESIGN.md §8](docs/DESIGN.md) 참고 (세로 중력만, nested grid/외부 드래그 인 없음, 고정 행 높이 등).
+[docs/DESIGN.md §9](docs/DESIGN.md) 참고 (세로 방향만, nested grid 없음, 고정 행 높이 등. 외부 모델 연동의 한계는 §8).
 
 ## License
 

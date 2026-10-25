@@ -164,4 +164,116 @@ test.describe('[DIN] 외부 요소를 끌어서 추가', () => {
       .evaluate((el) => getComputedStyle(el).touchAction);
     expect(ta).toBe('none');
   });
+
+  test.describe('autoAdd:false (외부 모델이 상태를 관리)', () => {
+    const dropLog = (page: any) => page.locator('#dropLog');
+
+    async function dragExt(page: any, cellX: number, cellY: number, release = true) {
+      const m = await page.evaluate(() => (window as any).editor.getMetrics());
+      const canvas = await box(page, '.daracl-drift');
+      const src = await box(page, '.pal-ext');
+      await page.mouse.move(src.x + 10, src.y + 10);
+      await page.mouse.down();
+      const stride = m.cellWidth + m.gap;
+      await page.mouse.move(
+        canvas.x + cellX * stride + (3 * stride) / 2,
+        canvas.y + cellY * (m.rowHeight + m.gap) + 40,
+        {
+          steps: 10,
+        },
+      );
+      if (release) await page.mouse.up();
+    }
+
+    test('DIN-08 autoAdd:false: onDrop 정보만 기록되고 레이아웃/이력/dirty/선택이 그대로다', async ({ page }) => {
+      await page.uncheck('#extAdd'); // 호출자가 추가하지 않는 모드
+      await page.click('[data-drift-id="e"] .ddr-content'); // 선택 상태를 만들어 둔다
+      const before = await page.evaluate(() => (window as any).editor.getLayout());
+      const events: string[] = [];
+      await page.evaluate(() => {
+        const w = window as any;
+        w.evs = [];
+        for (const n of ['add', 'layoutChange', 'select']) w.editor.on(n, () => w.evs.push(n));
+        w.editor.on('dragInEnd', (i: any) => w.evs.push(i === null ? 'end:null' : 'end:item'));
+      });
+      await dragExt(page, 9, 6);
+
+      await expect(dropLog(page)).toContainText('"x":9');
+      await expect(dropLog(page)).toContainText('"w":3');
+      await expect(dropLog(page)).toContainText('breakpoint=desktop');
+      expect(await page.evaluate(() => (window as any).editor.getLayout())).toEqual(before);
+      const state = await page.evaluate(() => ({
+        undo: (window as any).editor.canUndo(),
+        dirty: (window as any).editor.isDirty(),
+        sel: (window as any).editor.getSelected()?.id,
+        evs: (window as any).evs,
+      }));
+      expect(state).toEqual({ undo: false, dirty: false, sel: 'e', evs: ['end:null'] });
+      expect(events).toEqual([]);
+      await expect(page.locator('.ddr-dragin-ghost')).toHaveCount(0);
+      await expect(page.locator('.ddr-placeholder')).toBeHidden();
+    });
+
+    test('DIN-09 onDrop 안에서 addItem() 을 호출하면 항목이 정확히 하나만 생기고 한 번의 undo 로 되돌아간다', async ({
+      page,
+    }) => {
+      const before = await count(page);
+      await page.evaluate(() => {
+        (window as any).adds = 0;
+        (window as any).editor.on('add', () => (window as any).adds++);
+      });
+      await dragExt(page, 9, 6);
+      expect(await count(page)).toBe(before + 1);
+      expect(await page.evaluate(() => (window as any).adds)).toBe(1);
+      expect(await hasOverlap(page)).toBe(false);
+      const ids = await page.evaluate(() => (window as any).editor.getItems().map((i: any) => i.id));
+      expect(ids.filter((i: string) => i.startsWith('ext-'))).toEqual(['ext-1']);
+      await expect(page.locator('[data-drift-id="ext-1"]')).toBeVisible();
+      await page.click('#undo');
+      expect(await count(page)).toBe(before);
+    });
+
+    test('DIN-10 충돌 위치에 놓아도 콜백 전에 밀린 항목이 복원되고, 추가하지 않으면 모두 그대로다', async ({
+      page,
+    }) => {
+      await page.uncheck('#extAdd');
+      const a = await getItem(page, 'a');
+      await dragExt(page, 0, 0); // a 위
+      await expect(dropLog(page)).toContainText('onDrop:');
+      expect(await getItem(page, 'a')).toMatchObject({ x: a.x, y: a.y });
+      await expect(page.locator('[data-drift-id="a"]')).toHaveAttribute('data-y', String(a.y));
+      expect(await hasOverlap(page)).toBe(false);
+    });
+
+    test('DIN-11 Esc / 캔버스 밖 드롭에서는 onDrop 이 호출되지 않는다', async ({ page }) => {
+      await page.uncheck('#extAdd');
+      const canvas = await box(page, '.daracl-drift');
+      await dragExt(page, 9, 6, false);
+      await page.keyboard.press('Escape');
+      await page.mouse.up();
+      await expect(dropLog(page)).toHaveText('onDrop: -');
+
+      const src = await box(page, '.pal-ext');
+      await page.mouse.move(src.x + 10, src.y + 10);
+      await page.mouse.down();
+      await page.mouse.move(canvas.x + 100, canvas.y + 50, { steps: 6 });
+      await page.mouse.move(canvas.x + 100, canvas.y + canvas.height + 300, { steps: 6 });
+      await page.mouse.up();
+      await expect(dropLog(page)).toHaveText('onDrop: -');
+      expect(await page.evaluate(() => (window as any).editor.canUndo())).toBe(false);
+    });
+
+    test('DIN-12 기본 모드(.pal)는 그대로 드롭당 한 번만 추가된다', async ({ page }) => {
+      const before = await count(page);
+      const m = await page.evaluate(() => (window as any).editor.getMetrics());
+      const canvas = await box(page, '.daracl-drift');
+      const src = await box(page, '.pal >> nth=0');
+      await page.mouse.move(src.x + 10, src.y + 10);
+      await page.mouse.down();
+      await page.mouse.move(canvas.x + 9 * (m.cellWidth + m.gap), canvas.y + 6 * (m.rowHeight + m.gap), { steps: 8 });
+      await page.mouse.up();
+      expect(await count(page)).toBe(before + 1);
+      await expect(dropLog(page)).toHaveText('onDrop: -'); // .pal 은 onDrop 이 없다
+    });
+  });
 });

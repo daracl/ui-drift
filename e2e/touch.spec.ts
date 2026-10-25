@@ -67,6 +67,10 @@ test.describe('모바일 터치 편집', () => {
 
   test('리사이즈 핸들을 터치로 끌어 높이를 바꾼다', async ({ page }) => {
     const m = await page.evaluate(() => (window as any).editor.getMetrics()); // eslint-disable-line @typescript-eslint/no-explicit-any
+    // 핸들이 뷰포트 아래 가장자리 근처면 드래그 중 자동 스크롤이 동작하므로, 캔버스를 화면 위쪽으로 스크롤해 둔다
+    await page.evaluate(() =>
+      window.scrollTo(0, document.querySelector('.daracl-drift')!.getBoundingClientRect().top + window.scrollY - 120),
+    );
     const g = await box(page, `${item('a')} .ddr-resize-handle`);
     const start = { x: g.x + g.width / 2, y: g.y + g.height / 2 };
     await swipe(page, start, { x: start.x, y: start.y + 2 * (m.rowHeight + m.gap) });

@@ -79,6 +79,30 @@ export function toGridSize(width: number, height: number, m: DriftMetrics): { w:
   };
 }
 
+/**
+ * 겹치는 항목이 하나라도 있는지 검사한다.
+ * 열별로 y 순으로 정렬해 앞선 항목들의 가장 큰 하단과만 비교하므로 O(n·w + n log n) 이다.
+ */
+export function hasOverlap(items: readonly DriftItem[]): boolean {
+  const cols = new Map<number, DriftItem[]>();
+  for (const item of items) {
+    for (let c = item.x; c < item.x + item.w; c++) {
+      let list = cols.get(c);
+      if (!list) cols.set(c, (list = []));
+      list.push(item);
+    }
+  }
+  for (const list of cols.values()) {
+    list.sort((a, b) => a.y - b.y);
+    let bottom = -Infinity;
+    for (const item of list) {
+      if (item.y < bottom) return true;
+      bottom = Math.max(bottom, item.y + item.h);
+    }
+  }
+  return false;
+}
+
 /** 항목들의 하단 행 (총 행 수) */
 export function getRowCount(items: readonly DriftItem[]): number {
   return items.reduce((max, item) => Math.max(max, item.y + item.h), 0);

@@ -84,6 +84,8 @@
     "pwtest": "playwright test",
     "prepublishOnly": "npm run build",
     "example": "node scripts/build-example.mjs",
-    "check": "npm run typecheck && npm run lint && npm test"
+    "check": "npm run typecheck && npm run lint && npm test",
+    "bench:core": "node scripts/bench-core.mjs",
+    "bench:editor": "node scripts/bench-editor.cjs"
   }
 }

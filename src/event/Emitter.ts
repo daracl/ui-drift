@@ -29,6 +29,12 @@ export class Emitter<Events extends { [K in keyof Events]: Handler }> {
     Array.from(this.handlers.get(name) || []).forEach((handler) => handler(...args));
   }
 
+  /** 해당 이름의 리스너가 있는지 (없으면 이벤트 페이로드 생성을 건너뛰기 위해 사용) */
+  has<K extends keyof Events>(name: K): boolean {
+    const set = this.handlers.get(name);
+    return !!set && set.size > 0;
+  }
+
   clear(): void {
     this.handlers.clear();
   }

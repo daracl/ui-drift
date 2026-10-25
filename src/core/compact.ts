@@ -1,5 +1,5 @@
 import { DriftItem } from '@t/DriftLayout';
-import { compareYX, firstCollision } from './geometry';
+import { compareYX } from './geometry';
 
 /**
  * 세로 중력으로 압축한다.
@@ -16,38 +16,88 @@ export function compact(items: readonly DriftItem[], anchorId?: string, float = 
   return anchorId && !float ? place(first, undefined, float) : first;
 }
 
+/**
+ * 열별 배치 색인. 항목이 걸친 모든 열의 목록에 등록해 두면, 어떤 영역과의 충돌 탐색은
+ * 그 영역이 걸친 열의 항목만 보면 된다 (전체 배치 항목을 훑지 않는다).
+ */
+/** @internal core 내부(압축/빈 자리 탐색)에서만 쓴다 */
+export class ColumnIndex {
+  private readonly cols: DriftItem[][] = [];
+
+  add(item: DriftItem): void {
+    for (let c = item.x; c < item.x + item.w; c++) (this.cols[c] ||= []).push(item);
+  }
+
+  /** (x, w) 열 범위에서 [y, y+h) 행 구간과 겹치는 항목을 하나 반환한다 */
+  hit(x: number, w: number, y: number, h: number): DriftItem | undefined {
+    for (let c = x; c < x + w; c++) {
+      const list = this.cols[c];
+      if (!list) continue;
+      for (let i = 0; i < list.length; i++) {
+        const p = list[i];
+        if (p.y < y + h && p.y + p.h > y) return p;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * (x, w) 열 범위에서 y 위쪽에 놓인 항목들의 가장 큰 하단(y + h). 없으면 0.
+   * y 에서 위로 올릴 때 처음 막히는 행이며, 한 행씩 올려 보며 충돌을 확인한 결과와 같다
+   * (y 자리가 비어 있으므로 y 아래쪽 항목은 막지 않는다).
+   */
+  ceiling(x: number, w: number, y: number): number {
+    let top = 0;
+    for (let c = x; c < x + w; c++) {
+      const list = this.cols[c];
+      if (!list) continue;
+      for (let i = 0; i < list.length; i++) {
+        const bottom = list[i].y + list[i].h;
+        if (bottom <= y && bottom > top) top = bottom;
+      }
+    }
+    return top;
+  }
+}
+
+/** 겹치지 않는 가장 가까운 아래쪽 y 를 반환한다 */
+function pushDown(index: ColumnIndex, item: DriftItem): number {
+  let y = item.y;
+  let hit = index.hit(item.x, item.w, y, item.h);
+  // 충돌한 항목의 하단으로 점프해도 그 사이 위치는 모두 그 항목과 겹치므로 빈 자리를 건너뛰지 않는다
+  while (hit) {
+    y = hit.y + hit.h;
+    hit = index.hit(item.x, item.w, y, item.h);
+  }
+  return y;
+}
+
 function place(items: readonly DriftItem[], anchorId: string | undefined, float: boolean): DriftItem[] {
-  const placed: DriftItem[] = items.filter((item) => item.locked);
+  const index = new ColumnIndex();
   const result = new Map<string, DriftItem>();
-  placed.forEach((item) => result.set(item.id, item));
+  for (const item of items) {
+    if (item.locked) {
+      index.add(item);
+      result.set(item.id, item);
+    }
+  }
 
   const anchor = anchorId ? items.find((item) => item.id === anchorId && !item.locked) : undefined;
   if (anchor) {
-    const placedAnchor = { ...anchor, y: pushDown(placed, anchor) };
-    placed.push(placedAnchor);
+    const placedAnchor = { ...anchor, y: pushDown(index, anchor) };
+    index.add(placedAnchor);
     result.set(anchor.id, placedAnchor);
   }
 
   const movable = items.filter((item) => !item.locked && item !== anchor).sort(compareYX);
   for (const item of movable) {
-    let y = pushDown(placed, item);
-    while (!float && y > 0 && !firstCollision(placed, { ...item, y: y - 1 })) y--;
+    let y = pushDown(index, item);
+    if (!float && y > 0) y = index.ceiling(item.x, item.w, y);
 
     const next = y === item.y ? item : { ...item, y };
-    placed.push(next);
+    index.add(next);
     result.set(item.id, next);
   }
 
   return items.map((item) => result.get(item.id) as DriftItem);
-}
-
-/** 겹치지 않는 가장 가까운 아래쪽 y 를 반환한다 */
-function pushDown(placed: readonly DriftItem[], item: DriftItem): number {
-  let y = item.y;
-  let hit = firstCollision(placed, { ...item, y });
-  while (hit) {
-    y = hit.y + hit.h;
-    hit = firstCollision(placed, { ...item, y });
-  }
-  return y;
 }

@@ -33,6 +33,25 @@ export interface DriftItem extends DriftGeometry {
   responsive?: Record<string, DriftGeometry>;
 }
 
+/** 변경 전/후가 모두 있는 항목 (before/after 는 내부 상태와 분리된 복사본) */
+export interface DriftItemChange {
+  id: string;
+  before: DriftItem;
+  after: DriftItem;
+  /** x 또는 y 가 바뀌었다 */
+  moved: boolean;
+  /** w 또는 h 가 바뀌었다 */
+  resized: boolean;
+}
+
+/** 두 항목 목록의 차이 (모두 내부 상태와 분리된 복사본) */
+export interface DriftChanges {
+  added: DriftItem[];
+  removed: DriftItem[];
+  /** 위치/크기/내용 등이 바뀐 항목. 사용자가 조작한 항목과 충돌로 밀려난 항목을 모두 포함한다 */
+  changed: DriftItemChange[];
+}
+
 export interface DriftBreakpoint {
   /** breakpoint 이름 (responsive 키) */
   name: string;

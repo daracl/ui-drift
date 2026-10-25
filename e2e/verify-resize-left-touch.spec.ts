@@ -33,6 +33,10 @@ test.describe('[RSL] 모바일 터치: 왼쪽 리사이즈', () => {
     const before = await getItem(page, 'a');
     expect(before).toMatchObject({ x: 0, w: 2 });
 
+    // 핸들이 뷰포트 아래 가장자리 근처면 드래그 중 자동 스크롤이 동작하므로, 캔버스를 화면 위쪽으로 스크롤해 둔다
+    await page.evaluate(() =>
+      window.scrollTo(0, document.querySelector('.daracl-drift')!.getBoundingClientRect().top + window.scrollY - 120),
+    );
     const g = await box(page, '[data-drift-id="a"] .ddr-resize-handle[data-dir="sw"]');
     const start = { x: g.x + g.width / 2, y: g.y + g.height / 2 };
     // 오른쪽으로 한 칸 끌어 폭 줄이기 + 아래로 두 행 끌어 높이 늘리기 (오른쪽 가장자리는 고정)

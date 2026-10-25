@@ -26,9 +26,9 @@ index.ts = core + viewer + editor      core.ts = core      viewer.ts = core + vi
 
 | 모듈 | 책임 | DOM |
 | --- | --- | --- |
-| `core/` | 데이터 정규화/검증, 충돌, 압축(compact), 이동/리사이즈/추가/삭제, 좌표 변환, 반응형 변환, 직렬화 | X |
+| `core/` | 데이터 정규화/검증, 충돌, 압축(compact, 열별 색인), 이동/리사이즈/추가/삭제, 좌표 변환, 반응형 변환, 직렬화, 변경 비교(diff) | X |
 | `viewer/` | 레이아웃 → 정적 HTML + CSS 문자열 생성(SSR/빌드 타임) | X |
-| `editor/` | DOM 렌더, Drag/Resize(마우스·터치), 키보드, 선택, 히스토리, 이벤트 | O |
+| `editor/` | DOM 렌더, Drag/Resize(마우스·터치), 외부 요소 끌어오기(drag-in), 키보드, 선택, 히스토리, 이벤트 | O |
 | `event/` | 소형 Emitter | X |
 
 배포 entry: `@daracl/drift`(전체), `@daracl/drift/core`, `@daracl/drift/viewer`.
@@ -84,12 +84,48 @@ interface DriftBreakpoint { name; maxWidth; columns }
 * 3px 이동 임계값 전에는 클릭(선택)으로 취급. `Esc`/`pointercancel` 로 취소하면 원위치.
 * 드래그 중 모델은 변경하지 않고 snapshot 기준으로 미리보기만 계산(셀이 바뀔 때만 재계산) → drop 시 1회 커밋.
 * 화면 가장자리에서 자동 스크롤. 코어스 포인터에서 핸들/리사이즈 대상 최소 크기 44px.
-* 키보드: 방향키 이동, Shift+방향키 리사이즈, Delete 삭제, Esc 선택 해제.
+* 리사이즈 핸들은 카드 우하단(`se`: 오른쪽/아래로 조절)과 좌하단(`sw`: 왼쪽/아래로 조절, 오른쪽 가장자리 고정하고 `x`/`w` 가 함께 바뀜) 두 곳이다(`resizeHandles` 옵션). `sw` 의 무효 표시(locked 충돌)는 거부 후의 결과가 아니라 요청한 크기로 판정한다.
+* **외부 drag-in(`setupDragIn`)**: 에디터 밖 요소(팔레트 등)를 끌어다 캔버스에 놓아 추가한다. 별도 `DragInController` 가 document 단위 Pointer 리스너로 처리하며 원본은 그대로 두고 복제본(ghost)이 따라간다. 미리보기는 임시 id 로 `addItem` 을 계산해 placeholder 와 기존 항목의 비켜가는 모습만 보여주고(모델 불변), 놓는 순간 최종 위치/크기를 한 번 더 확정한다.
+  * 기본(`autoAdd:true`): 정리 후 `editor.addItem()` 한 번 → `add`/`layoutChange` 1회, undo 1단계.
+  * `autoAdd:false`: 외부 모델이 상태를 관리하는 환경용. 정리(ghost, placeholder, 밀린 항목 복원) 후 `onDrop` 으로 최종 위치·크기(복사본)만 전달하고 레이아웃/선택/이력/dirty/이벤트는 건드리지 않는다. 정리가 콜백보다 먼저이므로 콜백 안의 동기 `addItem()` 이 안전하다. `dragInEnd` 는 항상 `null`(추가된 항목 없음)이고 정상 드롭은 `onDrop` 으로 구분한다.
+* 키보드: 방향키 이동, Shift+방향키 리사이즈(오른쪽/아래 기준), Delete 삭제, Esc 선택 해제.
 * `destroy()` 는 AbortController 로 모든 리스너/ResizeObserver 를 해제한다.
 
-## 8. 알려진 제약
+## 8. 외부 모델 연동 설계
+
+외부 모델(예: ReportStudio)이 컴포넌트와 undo/redo 를 관리하는 환경에서 Drift 의 기능과 겹치지 않도록, 아래 항목을 **서로 독립적으로** 제어한다.
+
+| 관심사 | 수단 | 정책 |
+| --- | --- | --- |
+| undo/redo 중복 | 옵션 `history:false` (호출별 `{history:false}`) | 이력 스택에 쌓지 않고 `undo/redo/canUndo/canRedo` 는 false. `historyLimit:0` 같은 우회에 의존하지 않는다. 사용자 조작·이벤트는 정상 |
+| 키보드 중복 | 옵션 `keyboard:false`, `setKeyboard()` | 항목 키 처리(방향키/Shift+방향키/Delete/Esc 선택 해제)만 끈다. 진행 중 세션의 `Esc` 취소는 `document` 수준의 별도 리스너라서 항상 유지(드래그, 리사이즈, 외부 끌어오기) |
+| 프로그램 변경의 이벤트 | 옵션 `programmaticEvents`, 호출별 `{emit}` | `source:'user'` 는 항상 발생. 프로그램 호출만 억제 |
+| 변경 출처 | `info.source`: `'user' | 'api' | 'sync'` | 사용자 조작은 `'user'`(드래그/리사이즈/키보드/삭제 버튼/외부 끌어오기 drop), 프로그램 호출은 `'api'`, 동기화는 `'sync'`. 호출별 `{source}` 로 지정 |
+| 변경 항목 | `info.changes` (added/removed/changed{before,after,moved,resized}) | 변경 전/후 **효과적인 항목 목록**(현재 breakpoint)을 id 로 비교(`core/diff.ts`). 충돌로 밀려난 항목 포함, 변경 없는 항목 제외, 복사본 |
+| 일괄 동기화 | `syncItems()` | 단일 커밋(렌더 1회, 이벤트 1회), id 기준 DOM 유지, `placement` 로 정확한 복원/충돌 정규화 선택 |
+| 콘텐츠 수명 | `contentLifecycle` | id 별 요소와 `ContentState` 로 mount/update/unmount 를 정확히 한 번씩, DOM 을 비우기 전에 해제 |
+| 크기 알림 | `sizeChange`, 옵션 `sizeNotify` | 마지막으로 알린 크기와 비교(셀 크기 + 픽셀), rAF 로 프레임당 한 번, 리스너 없으면 예약 안 함 |
+
+### 순환 방지 원칙
+
+* 변경 감지는 **구조 비교**(`layoutsEqual`)이며 값이 같으면 어떤 것도 하지 않는다(렌더/이벤트/이력 없음).
+* `syncItems` 의 기본 `placement:'auto'` 는 겹침이 없는 입력을 압축하지 않고 그대로 복원한다. 그래서 `layoutChange(user)` → 호스트가 모델 갱신 → `syncItems(모델)` 이 **추가 이벤트 없이 끝난다**.
+* 동기화로 생긴 이벤트는 `source:'sync'` 로 구분되어 호스트가 걸러낼 수 있다.
+* `load()` 는 의미를 바꾸지 않았다(정규화/압축, 이력·저장 기준 초기화). 외부 모델과 맞출 때는 `syncItems()`.
+
+### 알려진 한계 (이 영역)
+
+* `syncItems` 는 항상 **기본 레이아웃** 항목을 대상으로 한다(breakpoint 편집 중에도). breakpoint 별 배치는 `responsive` 필드로 전달한다.
+* 호출별 `history:false` 로 일부 변경만 기록하지 않으면, `undo()` 가 기록 시점의 스냅샷으로 되돌려 그 사이의 변경이 사라질 수 있다. 외부 모델이 undo 를 관리하면 에디터 옵션 `history:false` 를 쓴다.
+* `sizeChange` 의 크기는 메트릭으로 계산한 카드 크기이며 콘텐츠 영역(패딩/타이틀 제외)의 실제 크기가 아니다. 필요하면 호스트가 `contentElement` 를 측정한다.
+* 콘텐츠 훅의 예외는 렌더/해제가 끝난 뒤 첫 예외를 다시 던진다(이벤트 발생 전에 던져질 수 있다).
+
+성능 측정과 개선 내용은 [performance.md](performance.md).
+
+## 9. 알려진 제약
 
 * 세로 방향만 지원한다(기본 중력 압축, 옵션 `float`). 가로 중력은 없음.
-* 레이아웃 중첩(nested grid), 외부 위젯 → 그리드 드래그 인(drag-in)은 범위 밖.
-* 리사이즈 핸들은 우하단(se) 하나. 키보드로 모든 방향 크기 조절 가능.
+* 레이아웃 중첩(nested grid)은 범위 밖. 그리드 간(에디터 ↔ 에디터) 항목 이동도 지원하지 않는다. 외부 요소 → 에디터 drag-in 은 `setupDragIn` 으로 지원한다(§7).
+* drag-in 중 화면 가장자리 자동 스크롤은 없다(캔버스가 화면에 보이는 상태에서 놓아야 한다). 동적으로 추가된 원본에 터치 스크롤 방지(`touch-action: none`)는 `setupDragIn` 호출 시점의 요소에만 자동 적용된다.
+* 리사이즈 핸들은 우하단(`se`)과 좌하단(`sw`) 두 곳이다. 위쪽/오른쪽·왼쪽 가장자리 단독 핸들(n, e, w, ne, nw)은 없다. 키보드 리사이즈는 오른쪽/아래 기준(Shift+방향키)만 있고 왼쪽 기준은 없다.
 * Viewer 의 행 높이는 고정(`rowHeight` px). 콘텐츠가 넘치면 항목 내부 스크롤(`overflow:auto`).

@@ -70,4 +70,42 @@ test.describe('[DIN] 모바일 터치로 외부 요소를 끌어서 추가', () 
     await touch(page, line({ x: src.x + 10, y: src.y + 10 }, { x: canvas.x + 100, y: canvas.y + 100 }));
     expect(await page.evaluate(() => window.scrollY)).toBe(0); // 페이지가 스크롤되지 않았다
   });
+
+  test('DIN-T4 터치 + autoAdd:false: onDrop 에 breakpoint 칸 기준 정보가 전달되고 레이아웃은 그대로다', async ({
+    page,
+  }) => {
+    await page.uncheck('#extAdd');
+    await page.evaluate(() => window.scrollTo(0, 0));
+    const src = await box(page, '.pal-ext');
+    const canvas = await box(page, '.daracl-drift');
+    const before = await page.evaluate(() => (window as any).editor.getLayout());
+    await touch(
+      page,
+      line({ x: src.x + 10, y: src.y + 10 }, { x: canvas.x + canvas.width / 2, y: Math.min(canvas.y + 80, 700) }),
+    );
+    await page.waitForTimeout(300);
+    await expect(page.locator('#dropLog')).toContainText('breakpoint=mobile');
+    await expect(page.locator('#dropLog')).toContainText('columns=4');
+    expect(await page.evaluate(() => (window as any).editor.getLayout())).toEqual(before);
+    await expect(page.locator('.ddr-dragin-ghost')).toHaveCount(0);
+  });
+
+  test('DIN-T5 터치 + 기본 호출자 추가: 4열 breakpoint 에서 미리보기와 같은 폭으로 한 개만 추가된다', async ({
+    page,
+  }) => {
+    await page.evaluate(() => window.scrollTo(0, 0));
+    const src = await box(page, '.pal-ext');
+    const canvas = await box(page, '.daracl-drift');
+    const n = await page.evaluate(() => (window as any).editor.getItems().length);
+    await touch(
+      page,
+      line({ x: src.x + 10, y: src.y + 10 }, { x: canvas.x + canvas.width / 2, y: Math.min(canvas.y + 80, 700) }),
+    );
+    await page.waitForTimeout(300);
+    const items = await page.evaluate(() => (window as any).editor.getItems());
+    expect(items).toHaveLength(n + 1);
+    const added = items.find((i: any) => i.id === 'ext-1');
+    const dropped = JSON.parse(((await page.locator('#dropLog').textContent()) as string).match(/\{.*?\}(?= \()/)![0]);
+    expect(added).toMatchObject({ w: dropped.w, h: dropped.h, x: dropped.x });
+  });
 });

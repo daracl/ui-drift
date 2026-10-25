@@ -1,5 +1,5 @@
 import { DriftGeometry, DriftItem } from '@t/DriftLayout';
-import { compact } from './compact';
+import { ColumnIndex, compact } from './compact';
 import { firstCollision, getRowCount, normalizeItem } from './geometry';
 
 export type DriftItemInput = Partial<DriftGeometry> & Omit<DriftItem, keyof DriftGeometry>;
@@ -13,9 +13,15 @@ export function findFreePosition(
 ): { x: number; y: number } {
   const width = Math.min(w, columns);
   const maxY = getRowCount(items);
+  // 열별 색인으로 충돌 항목을 찾고, 막히면 그 항목의 오른쪽 끝으로 건너뛴다.
+  // (x 보다 오른쪽 후보 중 그 항목과 겹치는 칸은 모두 막혀 있으므로 건너뛰어도 빈 자리를 놓치지 않는다)
+  const index = new ColumnIndex();
+  for (const item of items) index.add(item);
   for (let y = 0; y <= maxY; y++) {
-    for (let x = 0; x + width <= columns; x++) {
-      if (!firstCollision(items, { x, y, w: width, h })) return { x, y };
+    for (let x = 0; x + width <= columns; ) {
+      const hit = index.hit(x, width, y, h);
+      if (!hit) return { x, y };
+      x = hit.x + hit.w;
     }
   }
   return { x: 0, y: maxY };

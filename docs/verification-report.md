@@ -98,7 +98,7 @@ typecheck, lint, prettier, build, typedoc 모두 종료 코드 0.
 | NOT TESTED | 스크린샷 픽셀 비교 | 좌표(boundingBox) 비교로 대체. 스크린샷은 증거용으로만 저장 |
 | NOT TESTED | 키보드 접근성 전체(스크린 리더) | 방향키/Shift+방향키/Delete 만 검증 |
 
-알려진 제약(설계): Viewer 의 `@media` 는 뷰포트 기준이라 컨테이너 폭 기준인 Editor breakpoint 와 좁은 패널에서는 다를 수 있다. 세로 방향 배치만 지원한다. 상세는 `docs/DESIGN.md §8`.
+알려진 제약(설계, DESIGN.md §9): Viewer 의 `@media` 는 뷰포트 기준이라 컨테이너 폭 기준인 Editor breakpoint 와 좁은 패널에서는 다를 수 있다. 세로 방향 배치만 지원한다. 상세는 `docs/DESIGN.md §8`.
 
 ## E. Viewer 의 JavaScript 비실행 검증 증거
 

@@ -204,6 +204,7 @@ export class PointerController {
       s.el.style.left = `${leftPx}px`;
       s.el.style.width = `${width}px`;
       s.el.style.height = `${height}px`;
+      editor.notifyLiveSize(s.id, width, height);
 
       const size = toGridSize(width, height, metrics);
       const right = s.origin.x + s.origin.w;
@@ -218,8 +219,10 @@ export class PointerController {
     } else {
       const width = Math.max(metrics.cellWidth, s.clientX - canvas.left - originRect.left);
       const height = Math.max(metrics.rowHeight, s.clientY - canvas.top - originRect.top);
-      s.el.style.width = `${Math.min(width, canvas.width - originRect.left)}px`;
+      const liveWidth = Math.min(width, canvas.width - originRect.left);
+      s.el.style.width = `${liveWidth}px`;
       s.el.style.height = `${height}px`;
+      editor.notifyLiveSize(s.id, liveWidth, height);
 
       const size = toGridSize(width, height, metrics);
       target = { x: s.origin.x, y: s.origin.y, ...size };
@@ -272,7 +275,7 @@ export class PointerController {
 
     if (!active) return; // 이동하지 않았으면 클릭(선택)으로 끝난다
 
-    this.editor.commitEffective(preview, kind === 'drag' ? 'drag' : 'resize');
+    this.editor.commitEffective(preview, kind === 'drag' ? 'drag' : 'resize', { source: 'user' });
     const item = this.editor.getItem(id) || origin;
     this.editor.emit(kind === 'drag' ? 'dragEnd' : 'resizeEnd', item);
   }
@@ -296,6 +299,7 @@ export class PointerController {
     this.editor.getPlaceholder().hidden = true;
     this.editor.getPlaceholder().classList.remove(CLS.placeholderInvalid);
     this.editor.invalidateRect(s.el);
+    this.editor.endLiveSize(s.id);
     this.editor.renderItems(this.editor.getItems());
   }
 
@@ -305,10 +309,13 @@ export class PointerController {
     const btn = (e.target as Element).closest(`.${CLS.remove}`);
     if (!btn) return;
     const id = (btn.closest(`.${CLS.item}`) as HTMLElement | null)?.dataset.driftId;
-    if (id) this.editor.removeItem(id);
+    if (id) this.editor.removeItem(id, { source: 'user' });
   }
 
   private onKey(e: KeyboardEvent): void {
+    // 내부 키보드 처리를 끈 경우(keyboard:false)에는 항목 키 처리를 모두 건너뛴다.
+    // 진행 중인 드래그/리사이즈/외부 끌어오기의 Esc 취소는 document 리스너에서 따로 처리하므로 영향받지 않는다
+    if (!this.editor.isKeyboard()) return;
     const el = e.target as HTMLElement;
     // 항목 자체에 포커스가 있을 때만 처리한다 (내부 입력 요소의 키 입력은 건드리지 않는다)
     if (!el.classList?.contains(CLS.item)) return;
@@ -328,14 +335,14 @@ export class PointerController {
       if (item.locked) return;
       if (e.shiftKey) {
         if (this.editor.isResizable() && item.resizable !== false)
-          this.editor.resizeItem(id, item.w + dir[0], item.h + dir[1]);
+          this.editor.resizeItem(id, item.w + dir[0], item.h + dir[1], { source: 'user' });
       } else if (this.editor.isDraggable()) {
-        this.editor.moveItem(id, item.x + dir[0], item.y + dir[1]);
+        this.editor.moveItem(id, item.x + dir[0], item.y + dir[1], { source: 'user' });
       }
       this.editor.getItemElement(id)?.focus({ preventScroll: true });
     } else if ((e.key === 'Delete' || e.key === 'Backspace') && this.editor.isRemovable()) {
       e.preventDefault();
-      this.editor.removeItem(id);
+      this.editor.removeItem(id, { source: 'user' });
     } else if (e.key === 'Escape') {
       this.editor.clearSelection();
     }
