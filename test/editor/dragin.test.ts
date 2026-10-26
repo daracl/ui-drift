@@ -9,7 +9,7 @@ const STRIDE_Y = 48;
 function mockRects() {
   return jest.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
     const el = this as HTMLElement;
-    if (el.classList.contains('daracl-drift')) {
+    if (el.classList.contains('daracl-drift') || el.classList.contains('ddr-editor')) {
       return {
         left: CANVAS.left,
         top: CANVAS.top,

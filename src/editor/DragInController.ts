@@ -5,9 +5,14 @@ import type { DriftDragInDropResult, DriftDragInItem, DriftDragInOptions, DriftD
 import type { DriftEditor } from './DriftEditor';
 import type { DriftItemInput } from '@/core/operations';
 import { CLS } from './classNames';
+import { measureScrollTarget } from './scrollContainer';
 
 /** 클릭과 드래그를 구분하는 이동 임계값(px) */
 const DRAG_THRESHOLD = 3;
+/** 자동 스크롤: 가장자리 영역 두께(px), 프레임당 최대 이동(px), 스크롤 대상 재탐색 주기(ms) */
+const SCROLL_EDGE = 48;
+const SCROLL_STEP = 8;
+const SCROLL_RESOLVE_MS = 250;
 /** 미리보기 계산에 쓰는 임시 항목 id (사용자 id 와 겹치지 않는다) */
 const TEMP_ID = '\u0000ddr-dragin';
 
@@ -35,6 +40,11 @@ interface Session {
   placed?: DriftItem;
   clientX: number;
   clientY: number;
+  /** 활성화 시점 캔버스 높이의 행 수. 이보다 아래에는 마지막 항목 바로 아래까지만 놓을 수 있다 */
+  baseRows: number;
+  scrollRaf: number;
+  scrollEl?: HTMLElement;
+  scrollAt: number;
 }
 
 /**
@@ -139,6 +149,9 @@ export class DragInController {
       cell: { x: 0, y: 0 },
       clientX: e.clientX,
       clientY: e.clientY,
+      baseRows: 0,
+      scrollRaf: 0,
+      scrollAt: -Infinity,
     };
     try {
       hit.el.setPointerCapture?.(e.pointerId);
@@ -175,12 +188,63 @@ export class DragInController {
       this.activate(s);
     }
     this.update(s);
+    this.autoScroll(s);
+  }
+
+  /** 포인터가 캔버스의 '보이는' 영역 위에 있는지. 컨테이너/스크롤 대상 밖으로 잘려 안 보이는 부분은 제외한다 */
+  private isOver(s: Session, canvas: DOMRect): boolean {
+    const { top, bottom } = measureScrollTarget(this.editor.getScrollElement());
+    const host = (this.editor.element.parentElement ?? this.editor.element).getBoundingClientRect();
+    return (
+      s.clientX >= canvas.left &&
+      s.clientX <= canvas.right &&
+      s.clientY >= Math.max(canvas.top, host.top, top) &&
+      s.clientY <= Math.min(canvas.bottom, host.bottom, bottom)
+    );
+  }
+
+  /** 포인터가 보이는 영역의 위/아래 가장자리에 있으면 스크롤한다 (PointerController 와 같은 규칙) */
+  private autoScroll(s: Session): void {
+    if (s.scrollRaf || typeof requestAnimationFrame === 'undefined') return;
+    const step = () => {
+      s.scrollRaf = 0;
+      if (this.session !== s || !s.active) return;
+      const canvas = this.editor.element.getBoundingClientRect();
+      // 보이는 캔버스 위에 있을 때만 (캔버스 밖의 팔레트 등에서 끌 때는 스크롤하지 않는다)
+      if (!this.isOver(s, canvas)) return;
+      if (performance.now() - s.scrollAt > SCROLL_RESOLVE_MS) {
+        s.scrollEl = this.editor.getScrollElement();
+        s.scrollAt = performance.now();
+      }
+      const box = s.scrollEl;
+      // 스크롤 영역(대상 요소 또는 viewport)의 가장자리만 기준이다. 캔버스/컨테이너의 가장자리는 스크롤 가장자리가 아니다
+      // (페이지가 스크롤될 때 캔버스 위쪽 경계로 들어오는 중에 위로 스크롤되던 문제)
+      const { top, bottom } = measureScrollTarget(box);
+      const edge = Math.min(SCROLL_EDGE, Math.max(0, (bottom - top) / 3));
+      const fromTop = top + edge - s.clientY;
+      const fromBottom = s.clientY - (bottom - edge);
+      const depth = fromTop > 0 ? fromTop : fromBottom > 0 ? fromBottom : 0;
+      if (depth === 0 || edge === 0) return;
+      const speed = Math.max(1, Math.round(Math.min(depth / edge, 1) * SCROLL_STEP));
+      const dy = fromTop > 0 ? -speed : speed;
+      const read = () => (box ? box.scrollTop : window.scrollY);
+      const before = read();
+      if (box) box.scrollTop += dy;
+      else window.scrollBy(0, dy);
+      if (read() !== before) {
+        s.lastKey = '';
+        this.update(s);
+      }
+      s.scrollRaf = requestAnimationFrame(step);
+    };
+    s.scrollRaf = requestAnimationFrame(step);
   }
 
   private activate(s: Session): void {
     s.active = true;
     s.input = this.resolveInput(s);
     s.snapshot = this.editor.getItems();
+    s.baseRows = toGridPosition(0, this.editor.element.getBoundingClientRect().height, this.editor.getMetrics()).y;
 
     const rect = s.el.getBoundingClientRect();
     const ghost = s.el.cloneNode(true) as HTMLElement;
@@ -205,8 +269,7 @@ export class DragInController {
     }
 
     const canvas = editor.element.getBoundingClientRect();
-    const over =
-      s.clientX >= canvas.left && s.clientX <= canvas.right && s.clientY >= canvas.top && s.clientY <= canvas.bottom;
+    const over = this.isOver(s, canvas);
     editor.setDragInOver(over);
 
     const placeholder = editor.getPlaceholder();
@@ -247,12 +310,18 @@ export class DragInController {
       metrics,
     );
     const x = Math.min(Math.max(cell.x, 0), Math.max(0, columns - size.w));
-    const key = `${x},${cell.y}`;
+    // 처음 보이던 캔버스 높이 또는 마지막 항목 바로 아래까지만 놓을 수 있다 (캔버스가 늘어나며 자동 스크롤이 끝없이 이어지는 것을 막는다)
+    const maxY = Math.max(
+      s.baseRows,
+      s.snapshot.reduce((max, item) => Math.max(max, item.y + item.h), 0),
+    );
+    const y = Math.min(Math.max(cell.y, 0), maxY);
+    const key = `${x},${y}`;
     if (key === s.lastKey) return;
     s.lastKey = key;
-    s.cell = { x, y: cell.y };
+    s.cell = { x, y };
 
-    const preview = addItem(s.snapshot, columns, { ...input, id: TEMP_ID, x, y: cell.y }, editor.isFloat());
+    const preview = addItem(s.snapshot, columns, { ...input, id: TEMP_ID, x, y }, editor.isFloat());
     const placed = preview.find((item) => item.id === TEMP_ID) as DriftItem;
     s.placed = placed;
     placeholder.hidden = false;
@@ -340,6 +409,8 @@ export class DragInController {
 
   private finish(s: Session): void {
     this.session = undefined;
+    if (s.scrollRaf) cancelAnimationFrame(s.scrollRaf);
+    s.scrollRaf = 0;
     try {
       s.el.releasePointerCapture?.(s.pointerId);
     } catch (err) {
