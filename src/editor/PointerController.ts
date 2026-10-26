@@ -392,12 +392,14 @@ export class PointerController {
     if (s.kind === 'drag' && s.el.style.transform) {
       // transform 을 지우면 요소가 원래 자리로 튀므로, 같은 시각 위치를 left/top 으로 옮긴 뒤 스타일을 한 번 반영한다.
       // 그러면 invalidateRect 로 인라인 값이 사라질 때 현재 위치에서 새 자리로 전환(transition)된다
+      s.el.style.transition = 'none'; // 따라가기용 transform 전환이 놓는 순간 되감기지 않도록 잠시 끈다
       s.el.style.left = `${s.dragLeft}px`;
       s.el.style.top = `${s.dragTop}px`;
       s.el.style.transform = '';
       void s.el.offsetWidth;
     }
     s.el.classList.remove(CLS.dragging, CLS.resizing);
+    s.el.style.removeProperty('transition');
     this.editor.element.style.width = '';
     this.editor.getPlaceholder().hidden = true;
     this.editor.getPlaceholder().classList.remove(CLS.placeholderInvalid);

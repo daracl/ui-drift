@@ -88,6 +88,8 @@
 
     &.ddr-dragging {
       cursor: grabbing;
+      /* 포인터를 따라갈 때 짧게 감속시켜 끊김 없이 부드럽게 보이게 한다 (놓을 때는 PointerController.finish 가 끈다) */
+      transition: transform $drift-follow-duration ease-out;
       /* 이동은 transform 으로 하므로 별도 레이어로 올려 메인 스레드와 분리한다 */
       will-change: transform;
     }

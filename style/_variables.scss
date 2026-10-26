@@ -10,5 +10,6 @@ $drift-title-height: 28px !default;
 $drift-touch-target: 44px !default;
 
 /* 항목/placeholder 이동 애니메이션: 빠르게 출발해 부드럽게 멈추는 easing */
-$drift-move-duration: 0.22s !default;
-$drift-move-ease: cubic-bezier(0.22, 0.8, 0.26, 1) !default;
+$drift-move-duration: 0.3s !default;
+$drift-follow-duration: 0.09s !default;
+$drift-move-ease: cubic-bezier(0.2, 0.8, 0.2, 1) !default;
