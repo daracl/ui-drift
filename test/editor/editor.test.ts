@@ -490,7 +490,7 @@ describe('DriftEditor', () => {
   });
 
   describe('반응형', () => {
-    it('mobile breakpoint 편집은 해당 breakpoint 에만 저장된다', () => {
+    it('mobile breakpoint 편집은 해당 breakpoint 에 저장되고 desktop 에는 읽기 순서만 반영된다', () => {
       create();
       const onBp = jest.fn();
       editor.on('breakpointChange', onBp);
@@ -503,10 +503,10 @@ describe('DriftEditor', () => {
       editor.moveItem('c', 0, 0);
       const layout = editor.getLayout();
       expect(byId(layout.items, 'c').responsive!.mobile).toMatchObject({ x: 0, y: 0 });
-      expect(byId(layout.items, 'c')).toMatchObject({ x: 0, y: 2, w: 8 }); // 기본 레이아웃은 그대로
+      expect(byId(layout.items, 'c')).toMatchObject({ x: 0, y: 0, w: 8 }); // 기본 레이아웃: 크기 유지, c 가 맨 앞 순서
 
       editor.setBreakpoint(null);
-      expect(editor.getItem('c')).toMatchObject({ y: 2, w: 8 });
+      expect(editor.getItem('c')).toMatchObject({ y: 0, w: 8 });
       expect(() => editor.setBreakpoint('nope')).toThrow();
     });
 

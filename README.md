@@ -50,6 +50,12 @@ editor.destroy();                                    // 리스너/DOM 해제
 
 크기 조절 핸들은 카드 우하단(오른쪽/아래로)과 좌하단(왼쪽/아래로 — 오른쪽 가장자리는 고정되고 위치와 폭이 함께 바뀜) 두 곳이다. `resizeHandles: ['se']` 처럼 옵션으로 고를 수 있다. 변 가운데 핸들 `'e'`(동·너비), `'w'`(서·왼쪽 너비, 오른쪽 고정), `'s'`(남·높이)도 쓸 수 있다. 예: `resizeHandles: ['e', 'w', 's', 'se', 'sw']`.
 
+드래그·리사이즈 중 가장자리 자동 스크롤은 스크롤 가능한 상위 조상(없으면 window)을 자동으로 찾는다. 중첩 레이아웃에서 스크롤 영역을 직접 지정하려면 `scrollContainer` 를 쓴다. 문자열은 편집기 컨테이너 자신을 포함해 `closest()` 로 찾으므로 같은 화면에 편집기가 여러 개여도 각자 속한 영역만 스크롤된다.
+
+```ts
+createDriftEditor(gridEl, { scrollContainer: '.drs-canvas' });
+```
+
 조작: 마우스는 카드 전체를 끌어 이동, 우하단 핸들로 리사이즈. **터치는 상단 핸들에서만 드래그**(카드 본문은 페이지 스크롤). 키보드: 방향키 이동, Shift+방향키 리사이즈, Delete 삭제(`removable`), Esc 취소/선택 해제.
 
 드롭 위치 유지: `createDriftEditor(el, { float: true })` 또는 `editor.setFloat(true)`. 기본(false)은 놓은 항목을 위로 자동 압축하고, `float` 는 놓은 자리에 그대로 두며 겹칠 때만 아래로 민다. 값은 레이아웃 JSON 의 `float` 에 저장되어 Viewer 도 같은 배치를 낸다.

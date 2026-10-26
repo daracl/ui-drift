@@ -130,6 +130,34 @@ describe('responsive', () => {
     noOverlap(derived);
   });
 
+  it('축소 시 (y, x) 읽기 순서대로 왼쪽→오른쪽, 위→아래로 흘러 배치된다', () => {
+    const layout = createLayout({
+      columns: 12,
+      items: [
+        { id: 'd', x: 6, y: 2, w: 6, h: 2 },
+        { id: 'a', x: 0, y: 0, w: 6, h: 2 },
+        { id: 'c', x: 0, y: 2, w: 6, h: 2 },
+        { id: 'b', x: 6, y: 0, w: 6, h: 2 },
+      ],
+    });
+    const derived = deriveItems(layout.items, 12, 8);
+    const pos = Object.fromEntries(derived.map((i) => [i.id, [i.x, i.y]]));
+    expect(pos).toEqual({ a: [0, 0], b: [4, 0], c: [0, 2], d: [4, 2] });
+    // 읽기 순서(y, x)가 축소 후에도 유지된다
+    const order = derived
+      .slice()
+      .sort((p, q) => p.y - q.y || p.x - q.x)
+      .map((i) => i.id);
+    expect(order).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('줄에 다 들어가지 않으면 다음 줄로 내려간다', () => {
+    const items = Array.from({ length: 12 }, (_, n) => ({ id: 'i' + n, x: n, y: 0, w: 1, h: 1 }));
+    const derived = deriveItems(items, 12, 6);
+    expect(derived.map((i) => i.y)).toEqual([0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1]);
+    expect(derived.map((i) => i.x)).toEqual([0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5]);
+  });
+
   it('8열 축소 후에도 같은 행에 맞닿아 있던 항목은 같은 행에 남는다', () => {
     const row = createLayout({
       columns: 12,
@@ -148,14 +176,16 @@ describe('responsive', () => {
     expect(deriveItems(sample().items, 12, 24).map((i) => i.w)).toEqual([4, 8, 12]);
   });
 
-  it('breakpoint 편집은 해당 breakpoint 에만 저장되고 기본 레이아웃은 그대로다', () => {
+  it('breakpoint 편집은 해당 breakpoint 에 저장되고 기본 레이아웃에는 읽기 순서만 반영된다', () => {
     const layout = sample();
     const mobile = getBreakpoints(layout).find((b) => b.name === 'mobile')!;
     const edited = moveItem(resolveItems(layout, mobile), mobile.columns, 'c', 0, 0);
     const next = applyItems(layout, edited, mobile);
 
     expect(next.items.find((i) => i.id === 'c')!.responsive!.mobile).toMatchObject({ x: 0, y: 0 });
-    expect(next.items.find((i) => i.id === 'c')).toMatchObject({ x: 0, y: 2, w: 12 });
+    // 기본 레이아웃: 크기(w)는 유지하고 c 가 맨 앞 순서가 된다
+    expect(next.items.find((i) => i.id === 'c')).toMatchObject({ x: 0, y: 0, w: 12 });
+    expect(next.items.find((i) => i.id === 'a')!.y).toBeGreaterThan(0);
     const resolved = resolveItems(next, mobile);
     expect(resolved.find((i) => i.id === 'c')).toMatchObject({ x: 0, y: 0 });
     noOverlap(resolved);

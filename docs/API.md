@@ -14,6 +14,7 @@
 | `breakpoints` | tablet(≤1024, 8열), mobile(≤640, 4열) | `[]` 이면 반응형 비활성 |
 | `grid` / `gridColor` | true / - | 배경 모눈종이 격자. 색은 CSS 변수 `--ddr-grid-color`(기본 `rgba(148,163,184,.35)` 연한 반투명, 선 두께 0.5px)로 바꾸며, `gridColor` 옵션은 캔버스에 이 변수를 설정한다(영문/숫자/`#(),.%` 만 허용, 그 외는 무시) |
 | `resizeHandles` | `['se','sw']` | 표시할 리사이즈 핸들. `'se'` 우하단(오른쪽/아래로 조절), `'sw'` 좌하단(왼쪽/아래로 조절 — 오른쪽 가장자리를 고정하고 `x` 와 `w` 가 함께 바뀜). `[]` 이면 핸들 없음 |
+| `scrollContainer` | 자동 탐색 | 드래그·리사이즈 중 가장자리 자동 스크롤에 쓸 스크롤 영역(`string | HTMLElement`). 문자열은 편집기 컨테이너 자신을 포함해 `closest(selector)` 로 찾아 같은 화면의 다른 편집기와 섞이지 않는다. 생략하거나 일치하는 요소가 없으면 스크롤 가능한 상위 조상을 자동 탐색하고, 없으면 window. 대상과 브라우저 viewport 가 겹치는 가시 영역의 상단·하단 48px 에서 동작한다 |
 | `draggable` / `resizable` | true | 에디터 **전체**의 이동/리사이즈 허용. `enableDrag()`/`enableResize()` 로 변경 가능 (항목별 `locked`/`resizable` 과 함께 적용되며 둘 다 허용이어야 조작된다) |
 | `lockedResizable` | false | `resizable` 을 명시하지 않은 **locked(위치 고정) 항목**의 크기 조절을 기본으로 허용할지. true 이면 locked 항목은 위치만 고정되고 크기는 조절된다. 항목에 `resizable` 을 명시하면 그 값이 항상 우선. `setLockedResizable()` 로 런타임 변경 |
 | `responsive` | false | true 이면 컨테이너 폭으로 breakpoint 자동 선택. 기본은 폭이 바뀌어도 기본 레이아웃 유지(`setBreakpoint` 로 명시 전환) |

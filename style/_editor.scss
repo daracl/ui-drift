@@ -6,6 +6,8 @@
   box-sizing: border-box;
   width: 100%;
   overflow-x: hidden;
+  /* 컨테이너에 height/max-height 를 지정하면 편집 영역 안에서 세로 스크롤된다 (지정하지 않으면 내용 높이만큼 늘어난다) */
+  overflow-y: auto;
 
   *,
   *::before,

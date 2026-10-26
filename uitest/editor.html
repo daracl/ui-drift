@@ -79,6 +79,7 @@
     </select>
     <label><input type="checkbox" id="float"> float (드롭 위치 유지)</label>
     <label><input type="checkbox" id="grid" checked> 격자 표시</label>
+    <label>높이(px) <input type="number" id="height" min="0" step="50" placeholder="auto" style="width: 80px"></label>
   </div>
   <!-- 항목 옵션: 에디터에서 항목을 선택한 뒤 체크하면 바로 적용된다 -->
   <div class="item-options" id="itemOptions">
@@ -126,6 +127,8 @@
       },
       removable: true,
       resizeHandles,
+      // 스크롤 영역 지정 예: ?scroll=.wrap (편집기 조상의 selector). 생략하면 스크롤 가능한 조상을 자동 탐색
+      scrollContainer: new URLSearchParams(location.search).get('scroll') || undefined,
     });
     window.editor = editor;
     editor.setupDragIn('.pal');
@@ -193,6 +196,11 @@
     $('save').onclick = () => editor.save();
     $('export').onclick = () => { $('json').value = editor.toJSON(2); };
     $('import').onclick = () => editor.fromJSON($('json').value);
+    // 높이 지정: #editor(.ddr-editor 컨테이너)에 height 를 주면 그 안에서 스크롤된다. 비우면 내용 높이만큼 늘어난다. ?height=400 도 가능
+    const applyHeight = (v) => { $('editor').style.height = Number(v) > 0 ? v + 'px' : ''; };
+    const qh = new URLSearchParams(location.search).get('height');
+    if (qh) { $('height').value = qh; applyHeight(qh); }
+    $('height').oninput = (e) => applyHeight(e.target.value);
     $('grid').onchange = (e) => editor.setGrid(e.target.checked);
     $('float').onchange = (e) => editor.setFloat(e.target.checked);
     // ── 외부 모델이 상태를 관리하는 환경 시뮬레이션 (ReportStudio 등) ──

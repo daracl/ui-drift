@@ -27,6 +27,7 @@ import { GeometryStyle } from './GeometryStyle';
 import { DragInController } from './DragInController';
 import { PointerController } from './PointerController';
 import { CLS } from './classNames';
+import { resolveScrollTarget, type ScrollTarget } from './scrollContainer';
 
 const DEFAULT_WIDTH = 1200;
 const DEFAULT_RESIZE_HANDLES: DriftResizeHandle[] = ['se', 'sw'];
@@ -669,6 +670,11 @@ export class DriftEditor {
   /** @internal */
   getItemElement(id: string): HTMLElement | undefined {
     return this.itemEls.get(id);
+  }
+
+  /** @internal 드래그/리사이즈 자동 스크롤 대상 (옵션 `scrollContainer`, 생략하면 자동 탐색) */
+  getScrollTarget(): ScrollTarget {
+    return resolveScrollTarget(this.container, this.options.scrollContainer);
   }
 
   /** @internal */

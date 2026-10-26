@@ -87,6 +87,12 @@ export interface DriftEditorOptions {
    */
   resizeHandles?: DriftResizeHandle[];
   /**
+   * 드래그·리사이즈 중 가장자리 자동 스크롤에 쓸 스크롤 영역 (기본: 스크롤 가능한 상위 조상을 자동 탐색, 없으면 window).
+   * 문자열은 편집기 컨테이너 자신을 포함해 `closest(selector)` 로 찾으므로 같은 화면의 다른 편집기와 섞이지 않는다.
+   * 일치하는 요소가 없으면 자동 탐색한다. 예: `scrollContainer: '.drs-canvas'`
+   */
+  scrollContainer?: string | HTMLElement;
+  /**
    * 컨테이너 너비에 따라 breakpoint 를 자동 선택한다 (기본 false).
    * false 이면 폭이 바뀌어도 기본 레이아웃을 유지하고, setBreakpoint(name) 으로 명시적으로 전환한다.
    */

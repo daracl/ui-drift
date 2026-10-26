@@ -9,7 +9,8 @@ import { CLS } from './classNames';
 const DRAG_THRESHOLD = 3;
 /** 가장자리 자동 스크롤 영역/속도(px) */
 const SCROLL_EDGE = 48;
-const SCROLL_STEP = 14;
+/** 프레임당 최대 스크롤(px). 가장자리에 가까울수록 빨라지고 영역 안쪽 끝에서는 1px 로 천천히 움직인다 */
+const SCROLL_STEP = 8;
 
 const INTERACTIVE = 'input,textarea,select,button,a,[contenteditable="true"],[data-drift-no-drag]';
 
@@ -290,12 +291,21 @@ export class PointerController {
     const step = () => {
       s.scrollRaf = 0;
       if (this.session !== s || !s.active) return;
-      const dy =
-        s.clientY < SCROLL_EDGE ? -SCROLL_STEP : s.clientY > window.innerHeight - SCROLL_EDGE ? SCROLL_STEP : 0;
+      // 스크롤 대상(scrollContainer 옵션 또는 자동 탐색한 조상, 없으면 window)의 가시 영역 상단/하단 가장자리에서 동작한다
+      const { element: box, top, bottom } = this.editor.getScrollTarget();
+      const edge = Math.min(SCROLL_EDGE, Math.max(0, (bottom - top) / 3)); // 가시 영역이 작아도 위/아래 영역이 겹치지 않게
+      const fromTop = top + edge - s.clientY; // 양수이면 위쪽 영역 안 (클수록 가장자리에 가까움)
+      const fromBottom = s.clientY - (bottom - edge);
+      const depth = fromTop > 0 ? fromTop : fromBottom > 0 ? fromBottom : 0;
+      const speed = Math.max(1, Math.round(Math.min(depth / edge, 1) * SCROLL_STEP));
+      const dy = depth === 0 ? 0 : fromTop > 0 ? -speed : speed;
       if (dy === 0) return;
-      const before = window.scrollY;
-      window.scrollBy(0, dy);
-      if (window.scrollY !== before) {
+      const read = () => (box ? box.scrollTop : window.scrollY);
+      const before = read();
+      if (box) box.scrollTop += dy;
+      else window.scrollBy(0, dy);
+      // 스크롤로 캔버스 기준 포인터 좌표가 바뀌므로 드래그 위치와 placeholder 를 다시 계산한다
+      if (read() !== before) {
         s.lastKey = '';
         this.update(s);
       }
