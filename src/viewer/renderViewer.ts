@@ -122,7 +122,7 @@ function buildCss(layout: DriftLayout, sorted: DriftItem[], levels: Levels, scop
     `${root}{display:grid;box-sizing:border-box;width:100%;${cols(layout.columns)};grid-auto-rows:${fmt(
       layout.rowHeight,
     )}px;gap:${fmt(layout.gap)}px}`,
-    `${root}>.${scope}-item{box-sizing:border-box;min-width:0;min-height:0;overflow:auto}`,
+    `${root}>.${scope}-item{box-sizing:border-box;min-width:0;min-height:0;overflow:auto;border:1px solid #d0d7de;border-radius:6px}`,
     `${root}>.${scope}-item>.${scope}-title{box-sizing:border-box;height:${TITLE_HEIGHT}px;margin:0;overflow:hidden;font-weight:600;line-height:${TITLE_HEIGHT}px;white-space:nowrap;text-overflow:ellipsis}`,
   ];
 

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ui-drift viewer (localStorage)</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 12px;
+        font-family: system-ui, sans-serif;
+        background: #f3f4f6;
+      }
+      #status {
+        margin-bottom: 8px;
+        font-size: 12px;
+        color: #475569;
+      }
+      #viewer {
+        background: #fff;
+        border: 1px dashed #cbd5e1;
+      }
+    </style>
+  </head>
+  <body>
+    <h3>ui-drift Viewer</h3>
+    <div id="status"></div>
+    <div id="viewer"></div>
+    <style id="viewerCss"></style>
+
+    <script type="module">
+      import { renderViewer } from '/src/viewer.ts';
+
+      // editor.html 의 '저장'이 기록하는 키와 같아야 한다
+      const STORAGE_KEY = 'drift:layout';
+      const status = document.getElementById('status');
+
+      function load() {
+        let raw = null;
+        try {
+          raw = localStorage.getItem(STORAGE_KEY);
+        } catch (err) {
+          /* storage 접근 불가 */
+        }
+        if (!raw) {
+          document.getElementById('viewer').innerHTML = '';
+          status.innerHTML = '저장된 레이아웃이 없습니다. <a href="/uitest/editor.html">editor.html</a> 에서 저장하세요.';
+          return;
+        }
+        try {
+          const { html, css } = renderViewer(raw);
+          document.getElementById('viewerCss').textContent = css;
+          document.getElementById('viewer').innerHTML = html;
+          status.textContent = `localStorage('${STORAGE_KEY}') 에서 불러옴`;
+        } catch (err) {
+          status.textContent = `레이아웃을 해석할 수 없습니다: ${err.message}`;
+        }
+      }
+
+      load();
+      // 에디터에서 다시 저장하면(다른 탭) 바로 갱신한다
+      window.addEventListener('storage', (e) => e.key === STORAGE_KEY && load());
+    </script>
+  </body>
+</html>

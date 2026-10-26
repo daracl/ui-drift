@@ -37,7 +37,7 @@ interface Session {
   origin: DriftItem;
   active: boolean;
   lastKey: string;
-  /** 드래그 중 현재 대상 셀. 50% 판정의 기준(히스테리시스)이 된다 */
+  /** 드래그 중 현재 대상 셀(세션 시작 시점 배치 기준). 50% 판정의 기준(히스테리시스)이 된다 */
   cell: { x: number; y: number };
   preview: DriftItem[];
   clientX: number;
@@ -177,6 +177,9 @@ export class PointerController {
 
   private activate(s: Session): void {
     s.active = true;
+    // 끌다가 캔버스가 길어져 세로 스크롤바가 생기거나 사라져도 캔버스 폭(=셀 크기)이 흔들리지 않도록 세션 동안 폭을 고정한다
+    const canvasEl = this.editor.element;
+    canvasEl.style.width = `${canvasEl.getBoundingClientRect().width}px`;
     s.el.classList.add(s.kind === 'drag' ? CLS.dragging : CLS.resizing);
     // placeholder 가 (0, 0) 에서 날아오지 않도록 transition 없이 현재 위치에 먼저 배치한 뒤 보여준다
     const placeholder = this.editor.getPlaceholder();
@@ -216,6 +219,8 @@ export class PointerController {
         { w: s.origin.w, h: s.origin.h },
         originRect,
         metrics,
+        editor.isFloat(),
+        s.preview, // 50% 선은 화면에 지금 보이는 위치(밀려 올라간 자리) 기준으로 판정한다
       );
       const cell = {
         x: Math.min(Math.max(raw.x, 0), Math.max(0, columns - s.origin.w)),
@@ -331,6 +336,7 @@ export class PointerController {
       /* 이미 해제됨 */
     }
     s.el.classList.remove(CLS.dragging, CLS.resizing);
+    this.editor.element.style.width = '';
     this.editor.getPlaceholder().hidden = true;
     this.editor.getPlaceholder().classList.remove(CLS.placeholderInvalid);
     this.editor.invalidateRect(s.el);

@@ -181,6 +181,15 @@
     $('undo').onclick = () => editor.undo();
     $('redo').onclick = () => editor.redo();
     $('reset').onclick = () => editor.reset();
+    // 저장: 레이아웃을 localStorage 에 기록한다. viewer.html 이 같은 키로 읽어 보여준다
+    editor.on('save', (layout) => {
+      try {
+        localStorage.setItem('drift:layout', JSON.stringify(layout));
+        log.innerHTML = '저장 완료 → <a href="/uitest/viewer.html" target="_blank">uitest/viewer.html</a> 에서 확인';
+      } catch (err) {
+        log.textContent = `저장 실패: ${err.message}`;
+      }
+    });
     $('save').onclick = () => editor.save();
     $('export').onclick = () => { $('json').value = editor.toJSON(2); };
     $('import').onclick = () => editor.fromJSON($('json').value);

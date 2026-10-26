@@ -56,7 +56,8 @@
     user-select: none;
     -webkit-user-select: none;
     /* 위치/크기는 data-x/y/w/h 속성 선택자 CSS 로 정해지므로 left/top/width/height 를 전환한다 */
-    transition: left 0.15s ease, top 0.15s ease, width 0.15s ease, height 0.15s ease, box-shadow 0.15s ease;
+    transition: left $drift-move-duration $drift-move-ease, top $drift-move-duration $drift-move-ease,
+      width $drift-move-duration $drift-move-ease, height $drift-move-duration $drift-move-ease, box-shadow 0.15s ease;
     cursor: grab;
     outline: none;
 
@@ -151,7 +152,8 @@
     transform: rotate(45deg);
     opacity: 0;
     transition: opacity 0.12s ease;
-    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23555' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 8h12M5 5L2 8l3 3M11 5l3 3-3 3'/%3E%3C/svg%3E") center / contain no-repeat;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23555' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 8h12M5 5L2 8l3 3M11 5l3 3-3 3'/%3E%3C/svg%3E")
+      center / contain no-repeat;
   }
 
   .ddr-item:hover .ddr-resize-handle,
@@ -173,7 +175,8 @@
     border: 2px dashed $drift-accent;
     border-radius: $drift-radius;
     background: color.change($drift-accent, $alpha: 0.12);
-    transition: left 0.12s ease, top 0.12s ease, width 0.12s ease, height 0.12s ease;
+    transition: left $drift-move-duration $drift-move-ease, top $drift-move-duration $drift-move-ease,
+      width $drift-move-duration $drift-move-ease, height $drift-move-duration $drift-move-ease;
 
     &[hidden] {
       display: none;
@@ -182,6 +185,14 @@
     &.ddr-placeholder-invalid {
       border-color: $drift-danger;
       background: color.change($drift-danger, $alpha: 0.12);
+    }
+  }
+
+  /* 모션 최소화 설정에서는 이동 애니메이션을 끈다 */
+  @media (prefers-reduced-motion: reduce) {
+    .ddr-item,
+    .ddr-placeholder {
+      transition: none;
     }
   }
 

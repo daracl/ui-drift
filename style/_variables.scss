@@ -8,3 +8,7 @@ $drift-grid-color: rgba(148, 163, 184, 0.35) !default;
 /* 타이틀(핸들) 영역 높이. Viewer 의 TITLE_HEIGHT(src/constants.ts)와 같게 유지한다 */
 $drift-title-height: 28px !default;
 $drift-touch-target: 44px !default;
+
+/* 항목/placeholder 이동 애니메이션: 빠르게 출발해 부드럽게 멈추는 easing */
+$drift-move-duration: 0.22s !default;
+$drift-move-ease: cubic-bezier(0.22, 0.8, 0.26, 1) !default;
