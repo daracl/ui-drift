@@ -185,7 +185,7 @@ describe('pixel conversion', () => {
   });
 });
 
-describe('resolveDragCell (겹친 항목 크기 50% 판정)', () => {
+describe('resolveDragCell (겹친 항목 크기 60% 판정)', () => {
   // 셀 100px, gap 0. A 는 x=0, w=4 (400px), B 는 x=4, w=1
   const m = createMetrics(1200, 12, 100, 0);
   const A = item('a', 0, 0, 4, 1);
@@ -193,12 +193,12 @@ describe('resolveDragCell (겹친 항목 크기 50% 판정)', () => {
   const px = { width: m.cellWidth, height: 100 };
   const run = (left: number) => resolveDragCell([A, B], 'b', { x: 4, y: 0 }, { left, top: 0 }, { w: 1, h: 1 }, px, m).x;
 
-  it('왼쪽으로 이동: A 너비의 50% 를 지나기 전에는 A 앞(x=4)에 머문다', () => {
+  it('왼쪽으로 이동: A 너비의 60% 를 지나기 전에는 A 앞(x=4)에 머문다', () => {
     expect(run(250)).toBe(4);
   });
 
-  it('왼쪽으로 이동: A 너비의 50% 를 지나면 A 자리로 들어간다', () => {
-    expect(run(190)).toBeLessThan(4);
+  it('왼쪽으로 이동: A 너비의 60% 를 지나면 A 자리로 들어간다', () => {
+    expect(run(150)).toBeLessThan(4); // 시작 150 < A 의 40% 지점(160) = 왼쪽에서 60% 통과
   });
 });
 
@@ -211,16 +211,16 @@ describe('resolveDragCell 아래로 이동', () => {
   const run = (top: number, float = false) =>
     resolveDragCell([a, b], 'b', { x: 0, y: 0 }, { left: 0, top }, { w: 4, h: 2 }, px, m, float).y;
 
-  it('중심이 a 높이의 50% 를 넘기 전에는 위에 머문다', () => {
-    expect(run(240)).toBe(0); // 중심 340 < a 중간 350 (끝 440 은 이미 중간을 넘었다)
+  it('아래쪽 가장자리가 a 높이의 60% 를 넘기 전에는 위에 머문다', () => {
+    expect(run(170)).toBe(0); // bottom 370 < a 의 60% 지점 380
   });
 
-  it('중심이 a 높이의 50% 를 넘으면 a 아래 칸으로 넘어간다 (압축 모드)', () => {
-    expect(run(260)).toBe(5); // 중심 360 > 350 → a 하단(y=5)
+  it('아래쪽 가장자리가 a 높이의 60% 를 넘으면 a 아래 칸으로 넘어간다 (압축 모드)', () => {
+    expect(run(190)).toBe(5); // bottom 390 > 380 → a 하단(y=5)
   });
 
   it('float 모드에서는 겹친 자리에 그대로 둔다', () => {
-    expect(run(260, true)).toBe(3); // 점프 없이 셀 기준 위치
+    expect(run(270, true)).toBe(3); // 점프 없이 셀 기준 위치
   });
 });
 
@@ -232,36 +232,74 @@ describe('resolveDragCell 아래에 항목이 여러 개 쌓인 경우', () => {
   const run = (top: number) => resolveDragCell(items, 'b', { x: 0, y: 0 }, { left: 0, top }, { w: 4, h: 2 }, px, m).y;
 
   it('a 의 중간선만 지났으면 a 아래로 넘어가고 c 와 겹쳐도 되돌아오지 않는다', () => {
-    expect(run(260)).toBe(4); // 중심 360 > a 중간 300, < c 중간 500 → a 하단(y=4)
+    expect(run(160)).toBe(4); // bottom 360 > a 60% 지점 320, < c 60% 지점 520 → a 하단(y=4)
   });
 
-  it('이미 a 아래(현재 셀)에 있어도 c 의 중간선을 지나면 c 아래로 넘어간다', () => {
+  it('이미 a 아래(현재 셀)에 있어도 c 의 60% 선을 지나면 c 아래로 넘어간다', () => {
     const at = (top: number) => resolveDragCell(items, 'b', { x: 0, y: 4 }, { left: 0, top }, { w: 4, h: 2 }, px, m).y;
-    expect(at(350)).toBe(4); // 중심 450 < c 중간 500 → 유지
-    expect(at(410)).toBe(6); // 중심 510 > 500 → c 하단
+    expect(at(290)).toBe(4); // bottom 490 < c 60% 지점 520 → 유지
+    expect(at(330)).toBe(6); // bottom 530 > 520 → c 하단
   });
 
-  it('a 의 중간선 전에는 위에 머문다', () => {
-    expect(run(190)).toBe(0); // 중심 290 < 300
+  it('a 의 60% 선 전에는 위에 머문다', () => {
+    expect(run(90)).toBe(0); // bottom 290 < 320
   });
 });
 
-describe('resolveAxisCell (진행 방향 끝 50% 판정)', () => {
+describe('resolveAxisCell (진행 방향 끝 60% 판정)', () => {
   // 셀 100px, gap 0 → pitch 100
   const r = (pos: number, cur: number, span = 1) => resolveAxisCell(pos, span * 100, cur, span, 100, 100);
 
-  it('+ 방향: 끝이 다음 셀의 50% 를 넘기 전에는 유지, 넘으면 이동한다', () => {
-    expect(r(49, 0)).toBe(0);
-    expect(r(51, 0)).toBe(1);
+  it('+ 방향: 끝이 다음 셀의 60% 를 넘기 전에는 유지, 넘으면 이동한다', () => {
+    expect(r(59, 0)).toBe(0);
+    expect(r(61, 0)).toBe(1);
   });
 
-  it('- 방향: 시작이 이전 셀의 50% 를 넘기 전에는 유지, 넘으면 이동한다', () => {
-    expect(r(151, 2)).toBe(2);
-    expect(r(149, 2)).toBe(1);
+  it('- 방향: 시작이 이전 셀의 60% 를 넘기 전에는 유지, 넘으면 이동한다', () => {
+    expect(r(141, 2)).toBe(2);
+    expect(r(139, 2)).toBe(1);
   });
 
   it('여러 칸 항목도 끝 기준으로 판정한다', () => {
-    expect(r(49, 0, 2)).toBe(0);
-    expect(r(51, 0, 2)).toBe(1);
+    expect(r(59, 0, 2)).toBe(0);
+    expect(r(61, 0, 2)).toBe(1);
+  });
+});
+
+describe('resolveDragCell 아래로 끌 때 걸친 항목 (A | B / C)', () => {
+  // A(0,0), B(4,0) 가 나란히 있고 그 아래 C 가 두 열을 모두 덮는다. 셀 높이 100px, gap 0
+  const m = createMetrics(1200, 12, 100, 0);
+  const A = item('a', 0, 0, 4, 2);
+  const B = item('b', 4, 0, 4, 2);
+  const C = item('c', 0, 2, 8, 2);
+  const px = { width: m.cellWidth * 4, height: 200 };
+  const left = 4 * m.cellWidth;
+  const items = [A, B, C];
+  // B 가 C 아래로 내려가 있는 화면 상태 (C 는 A 아래로 올라온다)
+  const shownBelow = [A, B, { ...C }].map((it) => (it.id === 'b' ? { ...it, y: 4 } : it));
+  const at = (top: number, cur: { x: number; y: number }, shown: DriftItem[], down: boolean) =>
+    resolveDragCell(items, 'b', cur, { left, top }, { w: 4, h: 2 }, px, m, false, shown, down).y;
+
+  it('위에 있을 때: bottom 이 C 의 60% 를 넘어야 C 아래로 간다', () => {
+    expect(at(100, { x: 4, y: 0 }, items, true)).toBe(0); // bottom 300 < 320
+    expect(at(130, { x: 4, y: 0 }, items, true)).toBe(4); // bottom 330 > 320
+  });
+
+  it('이미 C 아래에 있으면 bottom 이 C 의 40% 위로 올라갈 때만 다시 위로 간다 (걸쳐도 깜박이지 않는다)', () => {
+    // top 250 은 C(200~400) 에 걸쳐 있지만 bottom 450 이 40% 지점(280) 아래이므로 C 아래에 머문다
+    expect(at(250, { x: 4, y: 4 }, shownBelow, true)).toBe(4);
+    expect(at(100, { x: 4, y: 4 }, shownBelow, true)).toBe(4); // bottom 300 > 280
+    expect(at(60, { x: 4, y: 4 }, shownBelow, true)).toBeLessThan(4); // bottom 260 < 280
+  });
+
+  it('위로 끌 때는 아래에 있는 C 에 top 이 C 의 60% 를 넘기 전까지 걸쳐도 위에 머문다 (번갈아 바뀌지 않는다)', () => {
+    // B 가 C 위에 있는 화면 상태. top 250 은 C 에 걸치고 bottom 450 은 C 아래이지만 top 기준 60% 지점(320) 전이다
+    expect(at(250, { x: 4, y: 0 }, items, false)).toBe(0);
+    expect(at(330, { x: 4, y: 0 }, items, false)).toBe(4); // top 330 >= 320 → C 아래
+  });
+
+  it('위로 끌 때는 top 이 C 의 40% 위로 올라가야 위로 간다', () => {
+    expect(at(250, { x: 4, y: 4 }, shownBelow, false)).toBeLessThan(4); // top 250 < 280
+    expect(at(290, { x: 4, y: 4 }, shownBelow, false)).toBe(4);
   });
 });

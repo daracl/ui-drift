@@ -28,7 +28,7 @@ function findScrollParent(start: HTMLElement): HTMLElement | undefined {
  * - 문자열: 편집기 컨테이너 자신을 포함해 closest(selector). 일치하는 요소가 없거나 selector 가 잘못되면 자동 탐색
  * - 생략: 스크롤 가능한 상위 조상을 자동 탐색, 없으면 window
  */
-export function resolveScrollTarget(container: HTMLElement, option?: string | HTMLElement): ScrollTarget {
+export function resolveScrollElement(container: HTMLElement, option?: string | HTMLElement): HTMLElement | undefined {
   let found: HTMLElement | undefined;
   if (option instanceof HTMLElement) {
     found = option;
@@ -39,11 +39,18 @@ export function resolveScrollTarget(container: HTMLElement, option?: string | HT
       /* 잘못된 selector 는 자동 탐색으로 처리한다 */
     }
   }
-  const element = found ? (isPageRoot(found) ? undefined : found) : findScrollParent(container);
+  return found ? (isPageRoot(found) ? undefined : found) : findScrollParent(container);
+}
 
+/** 스크롤 대상(element, 없으면 window)의 가시 영역 상단/하단을 잰다 */
+export function measureScrollTarget(element?: HTMLElement): ScrollTarget {
   // 대상과 viewport 가 겹치는 가시 영역만 기준으로 삼는다 (컨테이너가 화면 밖으로 길게 나가도 가장자리가 보이는 곳에서 동작)
   const view = window.innerHeight;
   if (!element) return { top: 0, bottom: view };
   const rect = element.getBoundingClientRect();
   return { element, top: Math.max(rect.top, 0), bottom: Math.min(rect.bottom, view) };
+}
+
+export function resolveScrollTarget(container: HTMLElement, option?: string | HTMLElement): ScrollTarget {
+  return measureScrollTarget(resolveScrollElement(container, option));
 }

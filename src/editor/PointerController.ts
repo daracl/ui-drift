@@ -1,15 +1,27 @@
 import { firstCollision, resolveDragCell, toGridSize, toPixelRect } from '@/core/geometry';
 import { moveItem, resizeItem, resizeItemFromLeft } from '@/core/operations';
 import type { DriftResizeHandle } from '@t/DriftEditor';
-import { DriftItem } from '@t/DriftLayout';
+import { DriftItem, DriftRect } from '@t/DriftLayout';
 import type { DriftEditor } from './DriftEditor';
 import { CLS } from './classNames';
+import { measureScrollTarget } from './scrollContainer';
+
+/** a 가 b 와 겹치는 면적이 a 면적에서 차지하는 비율 */
+function overlapRatio(a: DriftRect, b: DriftRect): number {
+  const w = Math.min(a.left + a.width, b.left + b.width) - Math.max(a.left, b.left);
+  const h = Math.min(a.top + a.height, b.top + b.height) - Math.max(a.top, b.top);
+  return w > 0 && h > 0 && a.width * a.height > 0 ? (w * h) / (a.width * a.height) : 0;
+}
 
 /** 클릭과 드래그를 구분하는 이동 임계값(px) */
 const DRAG_THRESHOLD = 3;
 /** 가장자리 자동 스크롤 영역/속도(px) */
 const SCROLL_EDGE = 48;
 /** 프레임당 최대 스크롤(px). 가장자리에 가까울수록 빨라지고 영역 안쪽 끝에서는 1px 로 천천히 움직인다 */
+/** 항목이 placeholder 에 이 비율 이상 겹치면 자리를 잡은 것으로 보고 이동 방향을 다시 정한다 */
+const SETTLE_RATIO = 0.9;
+/** 자동 스크롤 대상 요소를 다시 찾는 간격(ms) */
+const SCROLL_RESOLVE_MS = 250;
 const SCROLL_STEP = 8;
 
 const INTERACTIVE = 'input,textarea,select,button,a,[contenteditable="true"],[data-drift-no-drag]';
@@ -41,9 +53,19 @@ interface Session {
   /** 드래그 중 현재 대상 셀(세션 시작 시점 배치 기준). 50% 판정의 기준(히스테리시스)이 된다 */
   cell: { x: number; y: number };
   preview: DriftItem[];
+  /** 세로 방향을 정하는 기준 top (px). 처음엔 원래 자리이고, 항목이 placeholder 에 90% 이상 겹치면 그 위치로 다시 잡는다 */
+  anchorTop?: number;
+  /** 직전 placeholder 의 픽셀 영역 */
+  phRect?: DriftRect;
   clientX: number;
   clientY: number;
   scrollRaf: number;
+  /** 드래그 중인 요소의 현재 left/top (캔버스 기준 px) */
+  dragLeft: number;
+  dragTop: number;
+  /** 자동 스크롤 대상 요소 캐시. 스타일 계산(getComputedStyle)이 비싸므로 일정 시간마다만 다시 찾는다 */
+  scrollEl?: HTMLElement;
+  scrollAt: number;
 }
 
 /**
@@ -143,6 +165,9 @@ export class PointerController {
       clientX: e.clientX,
       clientY: e.clientY,
       scrollRaf: 0,
+      dragLeft: 0,
+      dragTop: 0,
+      scrollAt: -Infinity,
     };
     try {
       el.setPointerCapture?.(e.pointerId);
@@ -206,11 +231,23 @@ export class PointerController {
     if (s.kind === 'drag') {
       const maxLeft = Math.max(0, canvas.width - originRect.width);
       const left = Math.min(Math.max(s.clientX - canvas.left - s.grabX, 0), maxLeft);
-      const top = Math.max(s.clientY - canvas.top - s.grabY, 0);
-      // 드래그 중에만 포인터를 따라가도록 인라인 left/top 을 쓰고, 끝나면 invalidateRect 가 제거한다
-      s.el.style.left = `${left}px`;
-      s.el.style.top = `${top}px`;
+      // 끌고 있는 요소가 캔버스 아래로 나가면 스크롤 영역이 함께 늘어나 자동 스크롤이 끝없이 이어지므로, 캔버스 높이 안으로 제한한다
+      const maxTop = Math.max(0, canvas.height - originRect.height);
+      const top = Math.min(Math.max(s.clientY - canvas.top - s.grabY, 0), maxTop);
+      // 포인터를 따라가는 이동은 transform 으로 한다 (레이아웃을 다시 계산하지 않고 compositor 에서 처리된다).
+      // 기준 위치는 data-x/y 로 정해진 원래 자리이며, 끝나면 finish 가 정리한다
+      s.dragLeft = left;
+      s.dragTop = top;
+      s.el.style.transform = `translate3d(${left - originRect.left}px, ${top - originRect.top}px, 0)`;
 
+      // 세로 방향은 기준 위치(처음엔 원래 자리) 대비로 정한다. 아래로 내려와 자리가 바뀐 뒤 살짝 올라가는 정도로는 위로 가는 것으로 보지 않는다.
+      // 항목이 placeholder 에 90% 이상 겹치면 자리를 잡은 것이므로, 방향을 그 위치부터 다시 정한다.
+      if (
+        s.phRect &&
+        overlapRatio({ left, top, width: originRect.width, height: originRect.height }, s.phRect) >= SETTLE_RATIO
+      )
+        s.anchorTop = top;
+      const down = top >= (s.anchorTop ?? originRect.top);
       // 진행 방향의 끝이 겹친 항목(셀)의 50% 를 지났을 때만 대상 셀을 바꾼다
       const raw = resolveDragCell(
         s.snapshot,
@@ -221,7 +258,8 @@ export class PointerController {
         originRect,
         metrics,
         editor.isFloat(),
-        s.preview, // 50% 선은 화면에 지금 보이는 위치(밀려 올라간 자리) 기준으로 판정한다
+        s.preview, // 판정선은 화면에 지금 보이는 위치(밀려 올라간 자리) 기준이다
+        down,
       );
       const cell = {
         x: Math.min(Math.max(raw.x, 0), Math.max(0, columns - s.origin.w)),
@@ -283,6 +321,7 @@ export class PointerController {
     const placeholder = editor.getPlaceholder();
     placeholder.classList.toggle(CLS.placeholderInvalid, !!lockedHit);
     editor.applyRect(placeholder, moved);
+    s.phRect = toPixelRect(moved, metrics);
     editor.renderItems(preview, s.id);
   }
 
@@ -292,7 +331,12 @@ export class PointerController {
       s.scrollRaf = 0;
       if (this.session !== s || !s.active) return;
       // 스크롤 대상(scrollContainer 옵션 또는 자동 탐색한 조상, 없으면 window)의 가시 영역 상단/하단 가장자리에서 동작한다
-      const { element: box, top, bottom } = this.editor.getScrollTarget();
+      if (performance.now() - s.scrollAt > SCROLL_RESOLVE_MS) {
+        s.scrollEl = this.editor.getScrollElement();
+        s.scrollAt = performance.now();
+      }
+      const box = s.scrollEl;
+      const { top, bottom } = measureScrollTarget(box);
       const edge = Math.min(SCROLL_EDGE, Math.max(0, (bottom - top) / 3)); // 가시 영역이 작아도 위/아래 영역이 겹치지 않게
       const fromTop = top + edge - s.clientY; // 양수이면 위쪽 영역 안 (클수록 가장자리에 가까움)
       const fromBottom = s.clientY - (bottom - edge);
@@ -344,6 +388,14 @@ export class PointerController {
       s.el.releasePointerCapture?.(s.pointerId);
     } catch (err) {
       /* 이미 해제됨 */
+    }
+    if (s.kind === 'drag' && s.el.style.transform) {
+      // transform 을 지우면 요소가 원래 자리로 튀므로, 같은 시각 위치를 left/top 으로 옮긴 뒤 스타일을 한 번 반영한다.
+      // 그러면 invalidateRect 로 인라인 값이 사라질 때 현재 위치에서 새 자리로 전환(transition)된다
+      s.el.style.left = `${s.dragLeft}px`;
+      s.el.style.top = `${s.dragTop}px`;
+      s.el.style.transform = '';
+      void s.el.offsetWidth;
     }
     s.el.classList.remove(CLS.dragging, CLS.resizing);
     this.editor.element.style.width = '';

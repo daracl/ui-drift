@@ -27,7 +27,7 @@ import { GeometryStyle } from './GeometryStyle';
 import { DragInController } from './DragInController';
 import { PointerController } from './PointerController';
 import { CLS } from './classNames';
-import { resolveScrollTarget, type ScrollTarget } from './scrollContainer';
+import { resolveScrollElement } from './scrollContainer';
 
 const DEFAULT_WIDTH = 1200;
 const DEFAULT_RESIZE_HANDLES: DriftResizeHandle[] = ['se', 'sw'];
@@ -672,9 +672,9 @@ export class DriftEditor {
     return this.itemEls.get(id);
   }
 
-  /** @internal 드래그/리사이즈 자동 스크롤 대상 (옵션 `scrollContainer`, 생략하면 자동 탐색) */
-  getScrollTarget(): ScrollTarget {
-    return resolveScrollTarget(this.container, this.options.scrollContainer);
+  /** @internal 드래그/리사이즈 자동 스크롤 대상 요소 (옵션 `scrollContainer`, 생략하면 자동 탐색, 없으면 window → undefined) */
+  getScrollElement(): HTMLElement | undefined {
+    return resolveScrollElement(this.container, this.options.scrollContainer);
   }
 
   /** @internal */
@@ -719,7 +719,7 @@ export class DriftEditor {
   /** @internal 드래그/리사이즈 중 포인터를 따라가던 인라인 left/top/width/height 를 제거해 data 속성 기준으로 되돌린다 */
   invalidateRect(el: HTMLElement): void {
     this.rectCache.delete(el);
-    for (const prop of ['left', 'top', 'width', 'height']) el.style.removeProperty(prop);
+    for (const prop of ['left', 'top', 'width', 'height', 'transform']) el.style.removeProperty(prop);
   }
 
   /** @internal 항목이 사용하는 최대 y/h 에 맞춰 위치 CSS 규칙을 보장한다 */

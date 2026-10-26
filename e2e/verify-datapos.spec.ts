@@ -60,7 +60,7 @@ test.describe('[POS] 위치/크기는 data-x/y/w/h 속성이 결정한다', () =
       .toEqual([Math.round(8 * stride), 2 * 48, Math.round(3 * stride - 8), 2 * 40 + 8]);
   });
 
-  test('POS-03 Editor: 드래그 중에만 인라인 left/top 이 쓰이고 끝나면 제거되어 data 속성 기준이 된다', async ({
+  test('POS-03 Editor: 드래그 중에만 인라인 transform 이 쓰이고 끝나면 제거되어 data 속성 기준이 된다', async ({
     page,
   }) => {
     await page.evaluate(
@@ -71,9 +71,10 @@ test.describe('[POS] 위치/크기는 data-x/y/w/h 속성이 결정한다', () =
     await page.mouse.move(h.x + 20, h.y + 10);
     await page.mouse.down();
     await page.mouse.move(h.x + 300, h.y + 200, { steps: 8 });
-    expect(await page.evaluate(() => document.querySelector<HTMLElement>('[data-drift-id="a"]')!.style.left)).not.toBe(
-      '',
-    );
+    // 이동 중에는 transform 으로 포인터를 따라간다 (레이아웃을 건드리지 않는다)
+    expect(
+      await page.evaluate(() => document.querySelector<HTMLElement>('[data-drift-id="a"]')!.style.transform),
+    ).toContain('translate3d');
     await page.mouse.up();
     const after = await page.evaluate(() => {
       const el = document.querySelector('[data-drift-id="a"]') as HTMLElement;

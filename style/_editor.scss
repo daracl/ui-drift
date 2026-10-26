@@ -88,6 +88,8 @@
 
     &.ddr-dragging {
       cursor: grabbing;
+      /* 이동은 transform 으로 하므로 별도 레이어로 올려 메인 스레드와 분리한다 */
+      will-change: transform;
     }
   }
 

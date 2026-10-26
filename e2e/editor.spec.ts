@@ -302,12 +302,12 @@ test.describe('데스크톱 편집', () => {
     expect(await hasOverlap(page)).toBe(false);
   });
 
-  test('breakpoint 별 편집은 기본 레이아웃을 바꾸지 않는다', async ({ page }) => {
+  test('breakpoint 편집은 해당 breakpoint 에 저장되고 기본 레이아웃에는 읽기 순서만 반영된다', async ({ page }) => {
     await page.selectOption('#bp', 'mobile');
     await page.evaluate(() => (window as any).editor.moveItem('e', 0, 0)); // eslint-disable-line @typescript-eslint/no-explicit-any
     const layout = await page.evaluate(() => (window as any).editor.getLayout()); // eslint-disable-line @typescript-eslint/no-explicit-any
     const e = layout.items.find((i: { id: string }) => i.id === 'e');
-    expect(e).toMatchObject({ x: 8, y: 3 });
+    expect(e).toMatchObject({ x: 0, y: 0 }); // 기본 레이아웃: 읽기 순서가 맨 앞으로 반영된다 (크기 유지)
     expect(e.responsive.mobile).toMatchObject({ x: 0, y: 0 });
   });
 });

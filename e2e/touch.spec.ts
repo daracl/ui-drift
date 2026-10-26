@@ -36,7 +36,7 @@ test.describe('모바일 터치 편집', () => {
     }
   });
 
-  test('핸들을 터치로 끌어 순서를 바꾼다 (해당 breakpoint 에만 저장)', async ({ page }) => {
+  test('핸들을 터치로 끌어 순서를 바꾼다 (breakpoint 에 저장, 기본 레이아웃은 순서만 반영)', async ({ page }) => {
     const h = await box(page, `${item('b')} .ddr-handle`);
     const a = await box(page, item('a'));
     await swipe(page, { x: h.x + h.width / 2, y: h.y + h.height / 2 }, { x: h.x + h.width / 2, y: a.y + 6 });
@@ -49,7 +49,7 @@ test.describe('모바일 터치 편집', () => {
     const layout = await page.evaluate(() => (window as any).editor.getLayout()); // eslint-disable-line @typescript-eslint/no-explicit-any
     const stored = layout.items.find((i: { id: string }) => i.id === 'b');
     expect(stored.responsive.mobile.y).toBe(0);
-    expect(stored).toMatchObject({ x: 4, y: 0 }); // 기본 레이아웃 유지
+    expect(stored).toMatchObject({ x: 0, y: 0 }); // 기본 레이아웃: 읽기 순서만 반영된다 (크기 유지)
   });
 
   test('본문을 터치로 스와이프하면 드래그 대신 페이지가 스크롤된다', async ({ page }) => {

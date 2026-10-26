@@ -75,7 +75,7 @@ test.describe('[OPT] 예제: 선택한 항목의 locked / resizable 옵션', () 
 
     const m = await page.evaluate(() => (window as any).editor.getMetrics());
     const before = await getItem(page, 'a');
-    await dragHandle(page, 'a', 2 * (m.cellWidth + m.gap), 0);
+    await dragHandle(page, 'a', 3 * (m.cellWidth + m.gap), 0); // 옆 항목 너비의 60% 를 지나야 이동한다
     expect((await getItem(page, 'a')).x).toBeGreaterThan(before.x);
   });
 
@@ -168,7 +168,7 @@ test.describe('[OPT] 예제: 선택한 항목의 locked / resizable 옵션', () 
     const h = await box(page, `${card('b')} .ddr-handle`);
     await page.mouse.move(h.x + 20, h.y + h.height / 2);
     await page.mouse.down();
-    await page.mouse.move(h.x + 20 - (m.cellWidth + m.gap) * 2, h.y + h.height / 2, { steps: 8 });
+    await page.mouse.move(h.x + 20 - (m.cellWidth + m.gap) * 3, h.y + h.height / 2, { steps: 8 });
     await expect(page.locator('.ddr-placeholder')).toHaveClass(/ddr-placeholder-invalid/);
     await page.mouse.up();
     expect(await getItem(page, 'a')).toMatchObject({ x: locked.x, y: locked.y });
