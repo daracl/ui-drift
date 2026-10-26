@@ -71,6 +71,96 @@ export function toGridPosition(left: number, top: number, m: DriftMetrics): { x:
   };
 }
 
+/**
+ * 한 축에서 이동 중인 항목의 '진행 방향 끝'이 다음 셀의 50% 를 지났을 때만 셀을 바꾼다.
+ * - 양(+) 방향: 항목의 끝(pos + size)이 다음 셀의 중간을 넘으면 이동
+ * - 음(-) 방향: 항목의 시작(pos)이 이전 셀의 중간을 넘으면 이동
+ * @param pos 항목의 픽셀 시작 위치
+ * @param size 항목의 픽셀 크기
+ * @param cur 현재 대상 셀 좌표
+ * @param span 항목의 셀 크기
+ * @param cell 셀 한 칸의 픽셀 크기 (gap 제외)
+ * @param pitch 셀 한 칸 + gap
+ */
+export function resolveAxisCell(
+  pos: number,
+  size: number,
+  cur: number,
+  span: number,
+  cell: number,
+  pitch: number,
+): number {
+  const curPx = cur * pitch;
+  if (pos > curPx) {
+    const last = Math.ceil((pos + size - cell / 2) / pitch) - 1; // 끝이 중간을 넘은 마지막 셀
+    return Math.max(cur, last - span + 1);
+  }
+  if (pos < curPx) {
+    const first = Math.floor((pos - cell / 2) / pitch) + 1; // 시작이 중간을 넘은 첫 셀
+    return Math.min(cur, first);
+  }
+  return cur;
+}
+
+/**
+ * 드래그 중 대상 셀을 계산한다. 셀 기준 50% 판정(`resolveAxisCell`) 후, 겹친 항목의 '실제 크기' 기준으로 보정한다.
+ * - 왼쪽/위로 이동: 시작 가장자리가 겹친 항목의 너비/높이 50% 를 지나야 그 항목 자리로 들어간다
+ * - 오른쪽/아래로 이동: 끝 가장자리가 겹친 항목의 너비/높이 50% 를 지나야 들어간다
+ * 계산은 세션 시작 시점의 항목(items)을 기준으로 하며 자기 자신(selfId)은 제외한다.
+ */
+export function resolveDragCell(
+  items: readonly DriftItem[],
+  selfId: string,
+  cur: { x: number; y: number },
+  pos: { left: number; top: number },
+  size: { w: number; h: number },
+  px: { width: number; height: number },
+  m: DriftMetrics,
+): { x: number; y: number } {
+  const others = items.filter((it) => it.id !== selfId);
+  const pitchX = m.cellWidth + m.gap;
+  const pitchY = m.rowHeight + m.gap;
+  let x = resolveAxisCell(pos.left, px.width, cur.x, size.w, m.cellWidth, pitchX);
+  let y = resolveAxisCell(pos.top, px.height, cur.y, size.h, m.rowHeight, pitchY);
+
+  const hold = (axis: 'x' | 'y', cand: number): number => {
+    const horizontal = axis === 'x';
+    const sA = horizontal ? 'w' : 'h';
+    const oA = horizontal ? 'y' : 'x';
+    const oS = horizontal ? 'h' : 'w';
+    const oCand = horizontal ? y : x;
+    const oSpan = horizontal ? size.h : size.w;
+    const span = horizontal ? size.w : size.h;
+    const curA = horizontal ? cur.x : cur.y;
+    const pitch = horizontal ? pitchX : pitchY;
+    const cell = horizontal ? m.cellWidth : m.rowHeight;
+    const start = horizontal ? pos.left : pos.top;
+    const length = horizontal ? px.width : px.height;
+
+    for (let n = 0; n < 16; n++) {
+      let changed = false;
+      for (const it of others) {
+        if (!(it[oA] < oCand + oSpan && it[oA] + it[oS] > oCand)) continue;
+        if (!(it[axis] < cand + span && it[axis] + it[sA] > cand)) continue;
+        const mid = it[axis] * pitch + (it[sA] * cell + (it[sA] - 1) * m.gap) / 2;
+        let next = cand;
+        if (cand < curA && start > mid) next = Math.min(curA, it[axis] + it[sA]);
+        else if (cand > curA && start + length < mid) next = Math.max(curA, it[axis] - span);
+        if (next !== cand) {
+          cand = next;
+          changed = true;
+        }
+      }
+      if (!changed) break;
+    }
+    return cand;
+  };
+
+  x = hold('x', x);
+  y = hold('y', y);
+  return { x, y };
+}
+
 /** 픽셀 크기 → 가장 가까운 셀 크기 */
 export function toGridSize(width: number, height: number, m: DriftMetrics): { w: number; h: number } {
   return {

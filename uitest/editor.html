@@ -108,6 +108,10 @@
     import '/style/daracl.drift.scss';
     import { createDriftEditor } from '/src/index.ts';
 
+    // 리사이즈 핸들: 기본은 모서리(se, sw) + 변 가운데(e, w, s) 모두. ?handles=se,e 처럼 쿼리로 골라 볼 수 있다 (빈 값이면 핸들 없음)
+    const q = new URLSearchParams(location.search).get('handles');
+    const resizeHandles = q === null ? ['se', 'sw', 'e', 'w', 's'] : q.split(',').filter(Boolean);
+
     const editor = createDriftEditor('#editor', {
       layout: {
         columns: 24,
@@ -121,6 +125,7 @@
         ],
       },
       removable: true,
+      resizeHandles,
     });
     window.editor = editor;
     editor.setupDragIn('.pal');

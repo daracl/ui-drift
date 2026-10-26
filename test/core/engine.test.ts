@@ -8,6 +8,8 @@ import {
   moveItem,
   removeItem,
   resizeItem,
+  resolveAxisCell,
+  resolveDragCell,
   toGridPosition,
   toGridSize,
   toPixelRect,
@@ -180,5 +182,43 @@ describe('pixel conversion', () => {
   it('음수 위치는 0 으로, 최소 크기는 1 로 보정된다', () => {
     expect(toGridPosition(-100, -100, m).y).toBe(0);
     expect(toGridSize(0, 0, m)).toEqual({ w: 1, h: 1 });
+  });
+});
+
+describe('resolveDragCell (겹친 항목 크기 50% 판정)', () => {
+  // 셀 100px, gap 0. A 는 x=0, w=4 (400px), B 는 x=4, w=1
+  const m = createMetrics(1200, 12, 100, 0);
+  const A = item('a', 0, 0, 4, 1);
+  const B = item('b', 4, 0, 1, 1);
+  const px = { width: m.cellWidth, height: 100 };
+  const run = (left: number) =>
+    resolveDragCell([A, B], 'b', { x: 4, y: 0 }, { left, top: 0 }, { w: 1, h: 1 }, px, m).x;
+
+  it('왼쪽으로 이동: A 너비의 50% 를 지나기 전에는 A 앞(x=4)에 머문다', () => {
+    expect(run(250)).toBe(4);
+  });
+
+  it('왼쪽으로 이동: A 너비의 50% 를 지나면 A 자리로 들어간다', () => {
+    expect(run(190)).toBeLessThan(4);
+  });
+});
+
+describe('resolveAxisCell (진행 방향 끝 50% 판정)', () => {
+  // 셀 100px, gap 0 → pitch 100
+  const r = (pos: number, cur: number, span = 1) => resolveAxisCell(pos, span * 100, cur, span, 100, 100);
+
+  it('+ 방향: 끝이 다음 셀의 50% 를 넘기 전에는 유지, 넘으면 이동한다', () => {
+    expect(r(49, 0)).toBe(0);
+    expect(r(51, 0)).toBe(1);
+  });
+
+  it('- 방향: 시작이 이전 셀의 50% 를 넘기 전에는 유지, 넘으면 이동한다', () => {
+    expect(r(151, 2)).toBe(2);
+    expect(r(149, 2)).toBe(1);
+  });
+
+  it('여러 칸 항목도 끝 기준으로 판정한다', () => {
+    expect(r(49, 0, 2)).toBe(0);
+    expect(r(51, 0, 2)).toBe(1);
   });
 });

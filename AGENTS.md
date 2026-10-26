@@ -92,7 +92,7 @@ types → core → viewer
 
 - 모델 변경은 항상 `DriftEditor.commit()` 을 거친다(히스토리, 이벤트, 렌더). 변화가 없으면 이벤트/히스토리를 만들지 않는다.
 - 드래그/리사이즈 중에는 모델을 바꾸지 않고, 시작 시점 snapshot 기준으로 미리보기를 계산하여 셀이 바뀔 때만 재계산한다. drop 시 한 번 커밋한다(Esc/pointercancel 은 원복).
-- 리사이즈 핸들은 `data-dir` 로 방향을 구분한다(`se` 우하단, `sw` 좌하단, 옵션 `resizeHandles`). `sw` 는 오른쪽 가장자리를 고정하고 `x`/`w` 를 함께 바꾸며 core 의 `resizeItemFromLeft` 를 쓴다. 무효(locked 충돌) 표시는 결과가 아니라 '요청한' 크기로 판정한다(거부되면 결과가 원래 크기로 돌아가므로).
+- 리사이즈 핸들은 `data-dir` 로 방향을 구분한다(`se` 우하단, `sw` 좌하단, `e`/`w`/`s` 동·서·남 변 가운데, 옵션 `resizeHandles`; `w` 는 `sw` 처럼 왼쪽 가장자리를 움직여 locked 에 쓸 수 없다). `sw` 는 오른쪽 가장자리를 고정하고 `x`/`w` 를 함께 바꾸며 core 의 `resizeItemFromLeft` 를 쓴다. 무효(locked 충돌) 표시는 결과가 아니라 '요청한' 크기로 판정한다(거부되면 결과가 원래 크기로 돌아가므로).
 - 입력은 Pointer Events 하나로 처리한다. `touch-action: none` 은 **드래그 핸들과 리사이즈 핸들에만** 적용되고, `dragMode: 'auto'` 에서 터치는 핸들에서만 드래그가 시작된다(본문은 페이지 스크롤).
 - `responsive` 옵션은 기본 `false`(컨테이너 폭이 바뀌어도 기본 레이아웃 유지). 자동 breakpoint 전환은 `responsive: true` 또는 `setBreakpoint('auto')`.
 - `layout` 과 옵션 우선순위: `layout` 값(columns/rowHeight/gap/breakpoints/float:true)이 옵션보다 우선하며, `layout` 에 float 가 없을 때만 `options.float` 가 적용된다.

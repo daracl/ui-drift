@@ -11,6 +11,8 @@ export {
   getRowCount,
   hasOverlap,
   normalizeItem,
+  resolveAxisCell,
+  resolveDragCell,
   toGridPosition,
   toGridSize,
   toPixelRect,

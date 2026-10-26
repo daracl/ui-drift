@@ -1,5 +1,6 @@
-import { firstCollision, toGridPosition, toGridSize, toPixelRect } from '@/core/geometry';
+import { firstCollision, resolveDragCell, toGridSize, toPixelRect } from '@/core/geometry';
 import { moveItem, resizeItem, resizeItemFromLeft } from '@/core/operations';
+import type { DriftResizeHandle } from '@t/DriftEditor';
 import { DriftItem } from '@t/DriftLayout';
 import type { DriftEditor } from './DriftEditor';
 import { CLS } from './classNames';
@@ -13,11 +14,15 @@ const SCROLL_STEP = 14;
 const INTERACTIVE = 'input,textarea,select,button,a,[contenteditable="true"],[data-drift-no-drag]';
 
 type SessionKind = 'drag' | 'resize';
-type ResizeDir = 'se' | 'sw';
+type ResizeDir = DriftResizeHandle;
+
+const RESIZE_DIRS: readonly ResizeDir[] = ['se', 'sw', 'e', 'w', 's'];
+/** 왼쪽 가장자리를 움직이는 방향 (오른쪽 가장자리 고정, x 와 w 가 함께 바뀐다) */
+const fromLeft = (dir: ResizeDir): boolean => dir === 'sw' || dir === 'w';
 
 interface Session {
   kind: SessionKind;
-  /** 리사이즈 방향 (se: 오른쪽/아래, sw: 왼쪽/아래) */
+  /** 리사이즈 방향 (se: 오른쪽/아래, sw: 왼쪽/아래, e/w: 너비만, s: 높이만) */
   dir: ResizeDir;
   id: string;
   el: HTMLElement;
@@ -32,6 +37,8 @@ interface Session {
   origin: DriftItem;
   active: boolean;
   lastKey: string;
+  /** 드래그 중 현재 대상 셀. 50% 판정의 기준(히스테리시스)이 된다 */
+  cell: { x: number; y: number };
   preview: DriftItem[];
   clientX: number;
   clientY: number;
@@ -104,10 +111,11 @@ export class PointerController {
 
     let kind: SessionKind | undefined;
     const grip = target.closest<HTMLElement>(`.${CLS.resizeHandle}`);
-    const dir: ResizeDir = grip?.dataset.dir === 'sw' ? 'sw' : 'se';
+    const gripDir = grip?.dataset.dir as ResizeDir | undefined;
+    const dir: ResizeDir = gripDir && RESIZE_DIRS.includes(gripDir) ? gripDir : 'se';
     if (grip) {
       // 크기 조절은 위치 고정(locked)과 독립이다. 단 왼쪽 핸들은 x 가 바뀌므로 위치가 고정된 항목에는 쓸 수 없다
-      if (this.editor.isResizable() && this.editor.canResize(origin) && !(dir === 'sw' && origin.locked))
+      if (this.editor.isResizable() && this.editor.canResize(origin) && !(fromLeft(dir) && origin.locked))
         kind = 'resize';
     } else if (!origin.locked && this.editor.isDraggable() && this.canStartDrag(e, target)) {
       kind = 'drag';
@@ -129,6 +137,7 @@ export class PointerController {
       origin,
       active: false,
       lastKey: '',
+      cell: { x: origin.x, y: origin.y },
       preview: snapshot,
       clientX: e.clientX,
       clientY: e.clientY,
@@ -169,7 +178,13 @@ export class PointerController {
   private activate(s: Session): void {
     s.active = true;
     s.el.classList.add(s.kind === 'drag' ? CLS.dragging : CLS.resizing);
-    this.editor.getPlaceholder().hidden = false;
+    // placeholder 가 (0, 0) 에서 날아오지 않도록 transition 없이 현재 위치에 먼저 배치한 뒤 보여준다
+    const placeholder = this.editor.getPlaceholder();
+    placeholder.style.transition = 'none';
+    this.editor.applyRect(placeholder, s.origin);
+    placeholder.hidden = false;
+    void placeholder.offsetWidth; // 강제 reflow: 위치가 확정된 뒤에 transition 을 복원한다
+    placeholder.style.transition = '';
     this.editor.emit(s.kind === 'drag' ? 'dragStart' : 'resizeStart', s.origin);
   }
 
@@ -192,17 +207,32 @@ export class PointerController {
       s.el.style.left = `${left}px`;
       s.el.style.top = `${top}px`;
 
-      const cell = toGridPosition(left, top, metrics);
+      // 진행 방향의 끝이 겹친 항목(셀)의 50% 를 지났을 때만 대상 셀을 바꾼다
+      const raw = resolveDragCell(
+        s.snapshot,
+        s.id,
+        s.cell,
+        { left, top },
+        { w: s.origin.w, h: s.origin.h },
+        originRect,
+        metrics,
+      );
+      const cell = {
+        x: Math.min(Math.max(raw.x, 0), Math.max(0, columns - s.origin.w)),
+        y: Math.max(0, raw.y),
+      };
+      s.cell = cell;
       target = { ...cell, w: s.origin.w, h: s.origin.h };
       key = `${cell.x},${cell.y}`;
       if (key === s.lastKey) return;
       preview = moveItem(s.snapshot, columns, s.id, cell.x, cell.y, editor.isFloat());
-    } else if (s.dir === 'sw') {
+    } else if (fromLeft(s.dir)) {
       // 왼쪽에서 조절: 오른쪽 가장자리를 고정하고 포인터 위치를 새 왼쪽 가장자리로 삼는다
       const rightPx = originRect.left + originRect.width;
       const leftPx = Math.min(Math.max(s.clientX - canvas.left, 0), rightPx - metrics.cellWidth);
       const width = rightPx - leftPx;
-      const height = Math.max(metrics.rowHeight, s.clientY - canvas.top - originRect.top);
+      const height =
+        s.dir === 'w' ? originRect.height : Math.max(metrics.rowHeight, s.clientY - canvas.top - originRect.top);
       s.el.style.left = `${leftPx}px`;
       s.el.style.width = `${width}px`;
       s.el.style.height = `${height}px`;
@@ -219,8 +249,11 @@ export class PointerController {
       const w = Math.min(Math.max(size.w, minW), maxW);
       target = { x: right - w, y: s.origin.y, w, h: size.h };
     } else {
-      const width = Math.max(metrics.cellWidth, s.clientX - canvas.left - originRect.left);
-      const height = Math.max(metrics.rowHeight, s.clientY - canvas.top - originRect.top);
+      // e: 너비만, s: 높이만 바꾸고 다른 축은 원래 크기를 유지한다
+      const width =
+        s.dir === 's' ? originRect.width : Math.max(metrics.cellWidth, s.clientX - canvas.left - originRect.left);
+      const height =
+        s.dir === 'e' ? originRect.height : Math.max(metrics.rowHeight, s.clientY - canvas.top - originRect.top);
       const liveWidth = Math.min(width, canvas.width - originRect.left);
       s.el.style.width = `${liveWidth}px`;
       s.el.style.height = `${height}px`;

@@ -138,22 +138,30 @@
     cursor: pointer;
   }
 
+  /* 리사이즈 핸들: 작은 대각선 양방향 화살표 아이콘(↔ 를 45도 회전). 항목에 마우스를 올렸을 때(또는 조절 중/포커스)만 보인다 */
   .ddr-resize-handle {
     position: absolute;
-    right: 0;
-    bottom: 0;
-    width: 18px;
-    height: 18px;
+    right: 2px;
+    bottom: 2px;
+    width: 14px;
+    height: 14px;
     cursor: nwse-resize;
     touch-action: none;
-    background: linear-gradient(
-      135deg,
-      transparent 50%,
-      rgba(0, 0, 0, 0.35) 50% 58%,
-      transparent 58% 70%,
-      rgba(0, 0, 0, 0.35) 70% 78%,
-      transparent 78%
-    );
+    z-index: 1;
+    transform: rotate(45deg);
+    opacity: 0;
+    transition: opacity 0.12s ease;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23555' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 8h12M5 5L2 8l3 3M11 5l3 3-3 3'/%3E%3C/svg%3E") center / contain no-repeat;
+  }
+
+  .ddr-item:hover .ddr-resize-handle,
+  .ddr-item:focus-visible .ddr-resize-handle,
+  .ddr-item.ddr-resizing .ddr-resize-handle {
+    opacity: 0.75;
+  }
+
+  .ddr-item .ddr-resize-handle:hover {
+    opacity: 1;
   }
 
   .ddr-placeholder {
@@ -189,23 +197,49 @@
     cursor: default;
   }
 
-  /* 좌하단 핸들: 왼쪽에서 크기를 조절한다 (우하단 모양을 좌우 반전) */
+  /* 좌하단 핸들: 왼쪽에서 크기를 조절한다 */
   .ddr-resize-handle[data-dir='sw'] {
     right: auto;
-    left: 0;
+    left: 2px;
     cursor: nesw-resize;
-    background: linear-gradient(
-      225deg,
-      transparent 50%,
-      rgba(0, 0, 0, 0.35) 50% 58%,
-      transparent 58% 70%,
-      rgba(0, 0, 0, 0.35) 70% 78%,
-      transparent 78%
-    );
+    transform: rotate(-45deg);
   }
 
-  /* 위치가 고정된(locked) 항목: 왼쪽에서 조절하는 sw 핸들은 숨긴다 (se 핸들은 resizable 에 따라 보인다) */
+  /* 변 가운데 핸들 (동/서/남): 한 방향만 조절한다. 모서리 핸들보다 아래에 놓는다 */
+  .ddr-resize-handle[data-dir='e'],
+  .ddr-resize-handle[data-dir='w'] {
+    top: calc(50% - 12px);
+    bottom: auto;
+    width: 14px;
+    height: 24px;
+    z-index: 0;
+    cursor: ew-resize;
+    transform: none;
+  }
+
+  .ddr-resize-handle[data-dir='e'] {
+    right: 2px;
+  }
+
+  .ddr-resize-handle[data-dir='w'] {
+    right: auto;
+    left: 2px;
+  }
+
+  .ddr-resize-handle[data-dir='s'] {
+    right: auto;
+    bottom: 5px; /* 90도 회전하면 세로로 길어지므로 아래로 튀어나오지 않게 올린다 */
+    left: calc(50% - 12px);
+    width: 24px;
+    height: 14px;
+    z-index: 0;
+    cursor: ns-resize;
+    transform: rotate(90deg);
+  }
+
+  /* 위치가 고정된(locked) 항목: 왼쪽에서 조절하는 sw/w 핸들은 숨긴다 (나머지 핸들은 resizable 에 따라 보인다) */
   .ddr-item.ddr-no-resize-left .ddr-resize-handle[data-dir='sw'],
+  .ddr-item.ddr-no-resize-left .ddr-resize-handle[data-dir='w'],
   .ddr-item.ddr-no-resize .ddr-resize-handle,
   &.ddr-resize-disabled .ddr-resize-handle {
     display: none;
@@ -242,6 +276,7 @@
     .ddr-resize-handle {
       width: 28px;
       height: 28px;
+      opacity: 0.6; /* hover 가 없는 터치 기기에서는 항상 보인다 */
 
       /* 시각적 크기는 유지하면서 터치 영역을 최소 44px 로 확장 */
       &::after {

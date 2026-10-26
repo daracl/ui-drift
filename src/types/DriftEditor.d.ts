@@ -45,8 +45,12 @@ export interface DriftDragInOptions {
   item?: DriftDragInItem | ((source: HTMLElement) => DriftDragInItem);
 }
 
-/** 리사이즈 핸들 위치: 'se' 우하단, 'sw' 좌하단 */
-export type DriftResizeHandle = 'se' | 'sw';
+/**
+ * 리사이즈 핸들 위치
+ * - 'se' 우하단(오른쪽/아래), 'sw' 좌하단(왼쪽/아래)
+ * - 'e' 동쪽(오른쪽 변, 너비만), 'w' 서쪽(왼쪽 변, 너비만), 's' 남쪽(아래 변, 높이만)
+ */
+export type DriftResizeHandle = 'se' | 'sw' | 'e' | 'w' | 's';
 
 export type DriftDragMode = 'auto' | 'item' | 'handle';
 
@@ -77,8 +81,9 @@ export interface DriftEditorOptions {
    */
   lockedResizable?: boolean;
   /**
-   * 표시할 리사이즈 핸들 (기본 ['se', 'sw']).
-   * 'se' 는 우하단(오른쪽/아래로 조절), 'sw' 는 좌하단(왼쪽/아래로 조절. 오른쪽 가장자리는 고정되고 x 와 w 가 함께 바뀐다)
+   * 표시할 리사이즈 핸들 (기본 ['se', 'sw']). 빈 배열이면 핸들을 만들지 않는다.
+   * 'se' 는 우하단(오른쪽/아래로 조절), 'sw' 는 좌하단(왼쪽/아래로 조절. 오른쪽 가장자리는 고정되고 x 와 w 가 함께 바뀐다).
+   * 'e'(동), 'w'(서), 's'(남) 는 각 변의 가운데 핸들로 한 방향만 조절한다. 예: ['e', 'w', 's', 'se', 'sw']
    */
   resizeHandles?: DriftResizeHandle[];
   /**
