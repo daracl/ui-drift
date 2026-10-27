@@ -2,7 +2,7 @@
 export const CLS = {
   editor: 'ddr-editor',
   canvas: 'daracl-drift',
-  grid: 'ddr-grid',
+  graphLines: 'ddr-graph-lines',
   dragInSource: 'ddr-dragin-source',
   dragInGhost: 'ddr-dragin-ghost',
   dragInOver: 'ddr-dragin-over',

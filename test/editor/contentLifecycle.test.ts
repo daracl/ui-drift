@@ -23,7 +23,7 @@ describe('콘텐츠 수명 (contentLifecycle)', () => {
         log.push(`cleanup:${item.id}`);
       };
     },
-    update(item, contentEl, previous) {
+    update(item, _contentEl, previous) {
       log.push(`update:${item.id}:${previous.content}->${item.content}`);
       const w = widgets.get(item.id)!;
       w.updates++;
@@ -139,7 +139,7 @@ describe('콘텐츠 수명 (contentLifecycle)', () => {
     create(
       {},
       {
-        mount(item, contentEl) {
+        mount(_item, contentEl) {
           order.push(`mount(childCount=${contentEl.childNodes.length})`);
           contentEl.appendChild(document.createElement('i'));
           return () => order.push('cleanup');

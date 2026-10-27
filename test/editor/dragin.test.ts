@@ -62,7 +62,6 @@ describe('외부에서 끌어와 추가 (setupDragIn)', () => {
     });
     return editor;
   };
-  const byId = (id: string) => editor.getItems().find((i) => i.id === id) as DriftItem;
   /** 원본에서 눌러 캔버스의 (cellX, cellY) 근처로 끌어 놓는다 (포인터가 항목의 가운데에 오도록) */
   const dragTo = (cellX: number, cellY: number, wCells = 3, hCells = 2, type = 'mouse') => {
     const px = CANVAS.left + cellX * STRIDE_X + (wCells * STRIDE_X - 8) / 2;

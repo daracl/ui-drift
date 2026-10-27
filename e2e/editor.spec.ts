@@ -191,10 +191,10 @@ test.describe('데스크톱 편집', () => {
       }));
     expect((await lines()).pseudo).not.toBe('none');
     await page.uncheck('#grid');
-    await expect(page.locator('.daracl-drift')).not.toHaveClass(/ddr-grid/);
+    await expect(page.locator('.daracl-drift')).not.toHaveClass(/ddr-graph-lines/);
     expect(await lines()).toEqual({ pseudo: 'none', frame: 'none' });
     await page.check('#grid');
-    await expect(page.locator('.daracl-drift')).toHaveClass(/ddr-grid/);
+    await expect(page.locator('.daracl-drift')).toHaveClass(/ddr-graph-lines/);
     expect((await lines()).pseudo).not.toBe('none');
   });
 
@@ -213,7 +213,7 @@ test.describe('데스크톱 편집', () => {
       const el = host.querySelector('.daracl-drift') as HTMLElement;
       return { cls: el.className, pseudo: getComputedStyle(el, '::before').content };
     });
-    expect(r.cls).not.toMatch(/ddr-grid/);
+    expect(r.cls).not.toMatch(/ddr-graph-lines/);
     expect(r.pseudo).toBe('none');
   });
 

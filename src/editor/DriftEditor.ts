@@ -781,7 +781,7 @@ export class DriftEditor {
   private applyGrid(metrics: DriftMetrics): void {
     const el = this.element;
     const on = this.gridEnabled && metrics.cellWidth > 0;
-    el.classList.toggle(CLS.grid, on);
+    el.classList.toggle(CLS.graphLines, on);
     if (!on) {
       if (this.gridKey) {
         el.style.removeProperty('--ddr-grid-mask');

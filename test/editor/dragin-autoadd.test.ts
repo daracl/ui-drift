@@ -1,8 +1,6 @@
 import { createDriftEditor, DriftDragInDropResult, DriftEditor, DriftItem } from '@/index';
 
 const CANVAS = { left: 100, top: 100, width: 1200 };
-const CELL = (CANVAS.width - 8 * 11) / 12;
-const STRIDE_X = CELL + 8;
 const STRIDE_Y = 48;
 
 /** jsdom 에는 레이아웃이 없으므로 캔버스/원본의 위치를 직접 지정한다 */

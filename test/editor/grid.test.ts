@@ -16,7 +16,7 @@ describe('배경 셀 격자 (CSS 변수)', () => {
     const editor = createDriftEditor(container, { layout: { columns: 12, rowHeight: 40, gap: 8, items: [] } });
     const m = editor.getMetrics();
     expect(editor.isGrid()).toBe(true);
-    expect(canvas().classList.contains('ddr-grid')).toBe(true);
+    expect(canvas().classList.contains('ddr-graph-lines')).toBe(true);
     expect(prop('--ddr-grid-size')).toBe(`${m.cellWidth + m.gap}px 48px`);
     const svg = svgOf();
     expect(svg).toContain(`width="${m.cellWidth + m.gap}"`);
@@ -36,13 +36,13 @@ describe('배경 셀 격자 (CSS 변수)', () => {
 
   it('grid:false / setGrid 로 끄고 켤 수 있다', () => {
     const editor = createDriftEditor(container, { grid: false });
-    expect(canvas().classList.contains('ddr-grid')).toBe(false);
+    expect(canvas().classList.contains('ddr-graph-lines')).toBe(false);
     expect(prop('--ddr-grid-mask')).toBe('');
     editor.setGrid(true);
-    expect(canvas().classList.contains('ddr-grid')).toBe(true);
+    expect(canvas().classList.contains('ddr-graph-lines')).toBe(true);
     expect(prop('--ddr-grid-mask')).toContain('svg');
     editor.setGrid(false);
-    expect(canvas().classList.contains('ddr-grid')).toBe(false);
+    expect(canvas().classList.contains('ddr-graph-lines')).toBe(false);
     expect(prop('--ddr-grid-mask')).toBe('');
     expect(prop('--ddr-grid-size')).toBe('');
     expect(prop('--ddr-grid-offset')).toBe('');
