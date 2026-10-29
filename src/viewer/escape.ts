@@ -1,3 +1,5 @@
+import { camelToKebab } from '@daracl/core/utils';
+
 const ESCAPE_MAP: Record<string, string> = {
   '&': '&amp;',
   '<': '&lt;',
@@ -22,7 +24,7 @@ export function assertScope(scope: string): string {
 
 /** props 키를 data-* 속성 이름으로 변환한다. 허용되지 않으면 undefined */
 export function toDataAttribute(key: string): string | undefined {
-  const kebab = key.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+  const kebab = camelToKebab(key);
   if (!/^[a-z][a-z0-9-]*$/.test(kebab) || kebab === 'drift-id') return undefined;
   return `data-${kebab}`;
 }

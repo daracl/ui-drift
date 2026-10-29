@@ -1,7 +1,7 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { defineConfig } from 'vite';
-import { createCommonConfig, MODULE_NAME } from './vite.common.js';
+import { createCommonConfig, MODULE_NAME, topBanner } from './vite.common.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -12,13 +12,15 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: false,
     sourcemap: false,
-    minify: 'terser',
-    terserOptions: { compress: { passes: 2, drop_debugger: true }, format: { comments: /^!/ } },
+    minify: 'esbuild',
+    target: ['es2020', 'edge88', 'firefox78', 'chrome87', 'safari14'],
+    reportCompressedSize: false,
     lib: {
       entry: path.resolve(__dirname, 'src/index.umd.ts'),
       name: 'DaraclDrift',
       formats: ['umd'],
       fileName: () => `${MODULE_NAME}.umd.js`,
     },
+    rollupOptions: { output: { banner: topBanner } },
   },
 });

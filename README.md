@@ -2,7 +2,7 @@
 
 GridStack 스타일의 Drag & Drop 레이아웃 모듈. **Editor** 는 JavaScript 로 배치/크기를 편집하고, **Viewer** 는 저장된 레이아웃을 **JavaScript 없이 CSS Grid 만으로** 표시한다.
 
-- 런타임 의존성 없음 (순수 TypeScript)
+- 순수 TypeScript. 공통 유틸은 `@daracl/core/utils`를 사용하며 배포 번들에 필요한 함수만 포함한다.
 - 데스크톱(마우스) + 모바일(터치) — Pointer Events
 - 충돌 시 자동 재배치(세로 중력, `float` 로 드롭 위치 유지 가능), 리사이즈, undo/redo, JSON 저장/복원
 - 반응형: breakpoint 별 컬럼 수와 위치/크기 재정의, 미지정 시 자동 변환
@@ -11,6 +11,30 @@ GridStack 스타일의 Drag & Drop 레이아웃 모듈. **Editor** 는 JavaScrip
 설계 상세는 [docs/DESIGN.md](docs/DESIGN.md), API 는 [docs/API.md](docs/API.md) 를 본다.
 
 ## 설치 / 빌드
+
+개발 환경은 Node.js 24.20.0(`.nvmrc`)과 npm 12.2.1을 사용한다. 새 팀원은 아래 순서로 시작한다.
+
+```bash
+git clone https://github.com/daracl/ui-drift.git
+cd ui-drift
+nvm use
+npm ci
+npx playwright install chromium
+npm run build
+npm run dev
+```
+
+`@daracl/core`는 공개 npm 레지스트리의 `0.0.10` 버전을 사용한다. 별도 corejs 체크아웃이나
+`npm link`, `file:`, 로컬 경로 alias 없이 설치된다. `package-lock.json`을 함께 커밋하여 팀과 CI가
+같은 의존성을 설치한다. 공통 모듈 변경 시 corejs를 먼저 배포한 뒤 여기서 버전과 lockfile을 갱신한다.
+Vite는 공통 유틸을 ESM/CJS/UMD에 번들링하므로 UMD 사용자에게 별도 전역 스크립트는 필요 없다.
+버전 매니저가 없다면 Node.js 24.20.0을 설치하고 `nvm use` 단계는 생략한다.
+
+빌드는 Vite 7의 ESM 설정(`vite.config*.mjs`)을 사용한다. `npm run build`는 dist를 한 번 정리하고
+ESM/CJS, UMD, CSS, 타입 선언을 병렬 생성한다. 개별 `build:esm`은 dist를 정리하므로 다른 빌드와
+직접 동시에 실행하지 않는다. 빌드 스크립트 회귀 검사는 `npm run test:scripts`, 보안 검사는
+`npm run audit:security`(런타임) / `npm run audit:security:all`(개발 도구 포함)로 실행한다.
+변경 근거와 측정 결과는 [빌드 개선 기록](docs/build-improvements.md)에 정리했다.
 
 ```bash
 npm install

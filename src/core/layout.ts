@@ -1,4 +1,5 @@
 import { DEFAULT_COLUMNS, DEFAULT_GAP, DEFAULT_ROW_HEIGHT, LAYOUT_VERSION } from '@/constants';
+import { cloneJson } from '@daracl/core/utils';
 import {
   DriftBreakpoint,
   DriftGeometry,
@@ -51,7 +52,7 @@ function sanitizeItems(items: unknown): DriftItem[] {
 
 /** 레이아웃을 깊은 복사한다 */
 export function cloneLayout(layout: DriftLayout): DriftLayout {
-  return JSON.parse(JSON.stringify(layout)) as DriftLayout;
+  return cloneJson(layout);
 }
 
 /** 레이아웃 유효성을 검사한다. 보정 없이 문제를 모두 수집한다 */

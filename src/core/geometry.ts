@@ -1,10 +1,11 @@
 import { DriftGeometry, DriftItem, DriftMetrics, DriftRect } from '@t/DriftLayout';
+import { clamp as coreClamp } from '@daracl/core/utils';
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
 const toInt = (v: unknown, fallback: number): number => (isNum(v) ? Math.round(v) : fallback);
 
-export const clamp = (v: number, min: number, max: number): number => Math.min(Math.max(v, min), max);
+export const clamp = (v: number, min: number, max: number): number => coreClamp(v, min, max);
 
 /** 두 영역이 겹치는지 검사한다 (맞닿기만 한 경우는 겹침이 아니다) */
 export function collides(a: DriftGeometry, b: DriftGeometry): boolean {

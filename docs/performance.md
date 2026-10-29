@@ -106,7 +106,7 @@
 ```bash
 npm run build
 npm run bench:core                       # Node, dist/core.js
-npx vite --config vite.config.dev.js --port 5199 --host 127.0.0.1 &
+npx vite --config vite.config.dev.mjs --port 5199 --host 127.0.0.1 &
 npm run bench:editor                     # Chromium (BENCH_URL 로 서버 주소 지정)
 ```
 

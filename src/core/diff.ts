@@ -1,4 +1,5 @@
 import { DriftChanges, DriftItem, DriftItemChange, DriftLayout } from '@t/DriftLayout';
+import { cloneJson } from '@daracl/core/utils';
 
 const isObj = (v: unknown): v is object => typeof v === 'object' && v !== null;
 
@@ -35,7 +36,7 @@ export function layoutsEqual(a: DriftLayout, b: DriftLayout): boolean {
 }
 
 /** 내부 상태와 분리된 깊은 복사 */
-const copy = (item: DriftItem): DriftItem => JSON.parse(JSON.stringify(item)) as DriftItem;
+const copy = (item: DriftItem): DriftItem => cloneJson(item);
 
 /**
  * 변경 전/후 항목 목록을 id 기준으로 비교해 추가·제거·변경된 항목을 반환한다.

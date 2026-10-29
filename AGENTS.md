@@ -9,19 +9,19 @@ GridStack 스타일의 Drag & Drop 레이아웃 모듈.
 - **Editor**: JavaScript 로 컴포넌트를 추가/삭제/이동/리사이즈하고 JSON 으로 저장·복원한다. 마우스와 터치(Pointer Events)를 지원한다.
 - **Viewer**: 저장된 같은 JSON 을 **JavaScript 없이 HTML + CSS(CSS Grid)만으로** 표시한다. 레이아웃 계산용 JS 가 없고 편집 코드가 번들에 포함되지 않는다.
 - 같은 데이터 모델(`DriftLayout`)을 Editor 와 Viewer 가 공유한다.
-- 런타임 의존성은 없다(순수 TypeScript). 같은 조직의 `ui-grid` 의 구조와 규칙을 계승했다.
+- 공통 유틸은 공개 npm 패키지 `@daracl/core/utils`를 사용하고 필요한 함수만 번들링한다. 같은 조직의 `ui-grid` 의 구조와 규칙을 계승했다.
 
 ## 2. Technology Stack
 
 | 영역 | 사용 기술 |
 | --- | --- |
 | 언어 | TypeScript 5 (strict, target es2017), ESM/CJS/UMD |
-| 빌드 | Vite 5 (`vite.config.js` ESM·CJS 다중 entry, `vite.config.umd.js` UMD), `tsc --emitDeclarationOnly` + `tsc-alias`, `sass` CLI(CSS) |
+| 빌드 | Vite 7 (`vite.config.mjs` ESM·CJS 다중 entry, `vite.config.umd.mjs` UMD), `tsc --emitDeclarationOnly` + `tsc-alias`, Sass modern API(CSS) |
 | 스타일 | SCSS (`style/`), 클래스 접두사 `ddr-`, 캔버스 `daracl-drift` |
 | 단위/통합 테스트 | Jest 29 + ts-jest + jsdom (`test/`) |
 | 브라우저 테스트 | Playwright (`e2e/`, Chromium; desktop 과 mobile(Pixel 5) 프로젝트) |
 | 품질 | ESLint 8, Prettier 2 (세미콜론, single quote, printWidth 120, trailing comma all), typedoc |
-| 런타임 | Node 24 에서 검증됨, 패키지 매니저는 npm (`package-lock.json` 은 git 제외) |
+| 런타임 | Node 24.20.0 (`.nvmrc`), npm (`package-lock.json`을 커밋하고 `npm ci`로 설치) |
 
 import 별칭: `@/` → `src/`, `@t/` → `src/types/` (tsconfig, jest, vite 모두 동일하게 설정).
 
@@ -149,11 +149,11 @@ types → core → viewer
 | `npm install` | 의존성 설치. 최초 1회 `npx playwright install chromium` |
 | `npm run dev` | Vite 개발 서버 (포트 5179, `uitest/index.html`) |
 | `npm run typecheck` / `npm run lint` | `tsc --noEmit` / `eslint "src/**/*.ts"` |
-| `npm run build` | `clean` → ESM/CJS(`index/core/viewer`) → UMD → CSS(sass) → d.ts (`build:tsc`) |
+| `npm run build` | dist 정리 후 ESM/CJS(`index/core/viewer`), UMD, CSS, d.ts 병렬 생성 |
 | `npm run check:dts` | `dist/**/*.d.ts` 에 내부 별칭(`@t/*`, `@/*`)이 남았거나 상대 import 가 해석되지 않으면 실패 (`build:tsc` 의 마지막 단계로도 실행됨) |
 | `npm run example` | `dist` 가 있을 때 `example/viewer.html|css` 생성 (JS 없는 Viewer) |
 | `npm test` | Jest. `test/build/*` 는 `dist/` 가 있어야 실행되고 없으면 skip 된다 → 빌드 후 실행할 것 |
-| `npm run pwtest` | Playwright 전체 (webServer 로 `vite.config.dev.js` 자동 기동, 포트 5179) |
+| `npm run pwtest` | Playwright 전체 (webServer 로 `vite.config.dev.mjs` 자동 기동, 포트 5179) |
 | `npx playwright test e2e/<file>` | 단일 스펙. `--repeat-each=3` 로 불안정 테스트 확인 |
 | `npm run docs:gen` | typedoc → `docs/api/` (git 제외) |
 | `npm run check` | typecheck + lint + test |
@@ -164,7 +164,7 @@ types → core → viewer
 
 ### 배포 타입 선언(d.ts) 규칙
 
-`build:tsc` 의 순서는 **`tsc` → 원본 `src/**/*.d.ts` 복사(cpx) → `tsc-alias` → `check-dts`** 이다. `tsc-alias` 는 별칭이 가리키는 파일이 실제로 있을 때만 상대 경로로 바꾸는데, `src/types/*.d.ts` 는 `tsc` 가 출력하지 않고 복사 단계에서 `dist` 에 들어가므로, 복사 전에 `tsc-alias` 를 실행하면 `@t/*` 가 그대로 남아 외부 프로젝트가 타입을 해석하지 못한다. 순서를 바꾸지 않는다. 회귀 검사: `scripts/check-dts.mjs`, `test/build/dtsConsumer.test.ts`(npm pack 으로 설치한 소비자, `skipLibCheck:false`, Drift 전용 `paths` 없음).
+`build:tsc` 의 순서는 **`tsc` → 원본 `src/**/*.d.ts` 복사(Node fs) → `tsc-alias` → `check-dts`** 이다. `tsc-alias` 는 별칭이 가리키는 파일이 실제로 있을 때만 상대 경로로 바꾸는데, `src/types/*.d.ts` 는 `tsc` 가 출력하지 않고 복사 단계에서 `dist` 에 들어가므로, 복사 전에 `tsc-alias` 를 실행하면 `@t/*` 가 그대로 남아 외부 프로젝트가 타입을 해석하지 못한다. 순서를 바꾸지 않는다. 회귀 검사: `scripts/check-dts.mjs`, `test/build/dtsConsumer.test.ts`(npm pack 으로 설치한 소비자, `skipLibCheck:false`, Drift 전용 `paths` 없음).
 
 ## 9. Error Handling & Logging
 
@@ -176,7 +176,7 @@ types → core → viewer
 
 - 요청한 범위만 구현하고, 결과는 **실행해서 확인**한다. 실행하지 않은 테스트를 통과했다고 보고하지 않는다. 테스트를 삭제하거나 기대값을 낮춰 통과시키지 않는다. 실패하면 원인(제품 결함인지 테스트 문제인지)을 구분해 기록한다.
 - 기능을 바꿀 때는 위 §8 의 검증 순서를 따르고 결과를 수치로 보고한다.
-- 의존성은 꼭 필요할 때만 추가한다(현재 런타임 의존성 0). 새로운 기술 스택을 임의로 도입하지 않는다.
+- 의존성은 꼭 필요할 때만 추가한다(공통 유틸은 `@daracl/core/utils`). 새로운 기술 스택을 임의로 도입하지 않는다. 로컬 경로 의존성을 추가하지 않는다.
 - `F:\09.opensource\daracl\ui-grid` 는 참고용이며 수정하지 않는다.
 - 파일 편집은 Edit/Write 도구를 우선한다. 긴 스크립트나 여러 줄 문자열은 셸 heredoc 대신 파일로 작성해 실행한다(Windows Git Bash 에서 인용 문제가 반복되었다). Python 은 이 환경에서 쓸 수 없으므로 Node 스크립트를 쓴다.
 - 임시 파일은 `.tmp/`(git 제외)에 두고 작업 후 정리한다. 테스트 결과물(`test-results/`, `playwright-report/`)은 커밋하지 않는다.

@@ -1,5 +1,5 @@
 // 에디터(실제 Chromium) 연산 비용 측정. jsdom 이 아니라 실제 브라우저에서 스타일/레이아웃까지 포함해 잰다.
-// 사용: (개발 서버 기동) npx vite --config vite.config.dev.js --port 5199 --host 127.0.0.1
+// 사용: (개발 서버 기동) npx vite --config vite.config.dev.mjs --port 5199 --host 127.0.0.1
 //       node scripts/bench-editor.cjs [결과.json]
 // 각 연산을 REPEAT 번 실행해 중앙값(ms)을 기록한다. 연산 직후 레이아웃을 강제(offsetHeight)해 DOM 반영 비용을 포함한다.
 // 이 수치는 프로그램 호출 경로 비용이며 사용자 드래그의 프레임 시간과 동일하지 않다.

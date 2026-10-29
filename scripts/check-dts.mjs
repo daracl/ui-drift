@@ -56,7 +56,7 @@ for (const file of files) {
 if (problems.length) {
   console.error(`[check-dts] 배포 타입 선언 검사 실패 (${problems.length}건, 파일 ${files.length}개 검사)`);
   problems.forEach((p) => console.error(`  - ${p}`));
-  console.error('  build:tsc 순서는 tsc → 원본 .d.ts 복사(cpx) → tsc-alias 여야 합니다.');
+  console.error('  build:tsc 순서는 tsc → 원본 .d.ts 복사 → tsc-alias 여야 합니다.');
   process.exit(1);
 }
 console.log(`[check-dts] OK: ${files.length}개 .d.ts 에 내부 별칭이 없고 모든 상대 import 가 해석됩니다.`);

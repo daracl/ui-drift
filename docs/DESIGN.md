@@ -5,14 +5,14 @@
 | 항목 | ui-grid | ui-drift 적용 |
 | --- | --- | --- |
 | 언어 | TypeScript (strict, target es2017) | 동일 |
-| 빌드 | Vite 5 lib (ESM/CJS) + UMD 별도 설정, `tsc --emitDeclarationOnly` + `tsc-alias` | 동일 (+ 다중 entry) |
+| 빌드 | Vite lib (ESM/CJS) + UMD 별도 설정, `tsc --emitDeclarationOnly` | Vite 7 다중 entry + `tsc-alias`, 번들/CSS/선언 병렬 생성 |
 | 스타일 | SCSS → `daracl.grid(.min).css` | SCSS → `daracl.drift(.min).css`, `daracl.drift.viewer.min.css` |
 | 테스트 | Jest(ts-jest, jsdom) + Playwright, `uitest/*.html` 수동 페이지 | 동일 |
 | 별칭 | `@/` → `src/`, `@t/` → `src/types/` | 동일 |
 | 타입 | `src/types/*.d.ts` | 동일 |
 | 포맷 | prettier(세미콜론, single quote, 120), eslint | 설정 파일 그대로 복사 |
 | 포인터 | `PointerContext/Handler/Session` 상태 머신 | Pointer Events 기반 `DragSession` / `ResizeSession` |
-| 의존성 | 런타임 의존성 없음(@daracl/core는 external) | 런타임 의존성 **없음** |
+| 의존성 | `@daracl/core/utils`의 필요한 함수만 번들링 | 같은 공통 유틸을 번들링하며 DOM 코드 제외 |
 
 참고 프로젝트의 원본 소스는 수정하지 않았고 코드를 복사하지 않았다(설정 파일 제외).
 

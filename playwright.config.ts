@@ -10,7 +10,7 @@ export default defineConfig({
     trace: 'off',
   },
   webServer: {
-    command: 'npx vite --config vite.config.dev.js --port 5179 --host 127.0.0.1',
+    command: 'node node_modules/vite/bin/vite.js --config vite.config.dev.mjs --port 5179 --host 127.0.0.1',
     url: 'http://127.0.0.1:5179/uitest/editor.html',
     reuseExistingServer: true,
     timeout: 60000,

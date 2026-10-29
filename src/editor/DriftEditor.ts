@@ -1,4 +1,5 @@
 import { compact } from '@/core/compact';
+import { cloneJson } from '@daracl/core/utils';
 import { isMovable, isResizable as isItemResizable } from '@/core/flags';
 import { diffItems, itemsEqual, layoutsEqual } from '@/core/diff';
 import { addItem, moveItem, normalizeItems, removeItem, resizeItem, updateItem } from '@/core/operations';
@@ -40,7 +41,7 @@ function sanitizeColor(color?: string): string | undefined {
 }
 
 /** 내부 상태와 분리된 깊은 복사 (콜백/이벤트로 내보내는 항목용) */
-const cloneItem = (item: DriftItem): DriftItem => JSON.parse(JSON.stringify(item)) as DriftItem;
+const cloneItem = (item: DriftItem): DriftItem => cloneJson(item);
 
 /** requestAnimationFrame 이 없는 환경(SSR, 일부 테스트)에서는 타이머로 대체한다 */
 const raf = (cb: () => void): number =>

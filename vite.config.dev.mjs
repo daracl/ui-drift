@@ -1,5 +1,5 @@
 import { defineConfig } from 'vite';
-import { createCommonConfig } from './vite.common.js';
+import { createCommonConfig } from './vite.common.mjs';
 
 // 개발 서버 / Playwright 전용 (open 옵션 없음)
 const common = createCommonConfig();

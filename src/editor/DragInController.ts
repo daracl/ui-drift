@@ -1,4 +1,5 @@
 import { addItem } from '@/core/operations';
+import { cloneJson } from '@daracl/core/utils';
 import { normalizeItem, toGridPosition, toPixelRect } from '@/core/geometry';
 import { DriftItem } from '@t/DriftLayout';
 import type { DriftDragInDropResult, DriftDragInItem, DriftDragInOptions, DriftDragInSource } from '@t/DriftEditor';
@@ -378,7 +379,7 @@ export class DragInController {
 
   /** onDrop 에 전달할 결과를 만든다. 내부 상태와 분리된 깊은 복사본이다 */
   private result(source: HTMLElement, input: DriftItemInput, geo: DriftItem): DriftDragInDropResult {
-    const item = JSON.parse(JSON.stringify(input)) as DriftDragInItem;
+    const item = cloneJson(input) as DriftDragInItem;
     if (!item.id) delete item.id;
     item.x = geo.x;
     item.y = geo.y;

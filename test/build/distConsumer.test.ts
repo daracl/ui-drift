@@ -5,6 +5,7 @@
 import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import { runInNewContext } from 'vm';
 
 const root = path.resolve(__dirname, '../..');
 const dist = path.join(root, 'dist');
@@ -64,6 +65,22 @@ run('dist: 외부 프로젝트에서의 사용 (Node)', () => {
     const css = fs.readFileSync(path.join(dist, 'daracl.drift.viewer.min.css'), 'utf8');
     expect(css).not.toMatch(/ddr-handle|ddr-resize|ddr-placeholder|ddr-editor|touch-action/);
   });
+
+  it('UMD 번들은 전역 API와 라이선스 배너를 유지한다', () => {
+    const code = fs.readFileSync(path.join(dist, 'daracl.drift.umd.js'), 'utf8');
+    const window = {} as { Daracl: { drift: { createLayout: () => { version: number }; renderViewer: unknown } } };
+    runInNewContext(code, { window });
+    expect(window.Daracl.drift.createLayout().version).toBe(1);
+    expect(typeof window.Daracl.drift.renderViewer).toBe('function');
+    expect(code.includes('Licensed MIT')).toBe(true);
+  });
+
+  it.each(['index.js', 'index.cjs', 'core.js', 'core.cjs', 'viewer.js', 'viewer.cjs'])(
+    '%s에 라이선스 배너를 보존한다',
+    (name) => {
+      expect(fs.readFileSync(path.join(dist, name), 'utf8').includes('Licensed MIT')).toBe(true);
+    },
+  );
 });
 
 describe('문서(docs/API.md)와 구현의 일치', () => {
