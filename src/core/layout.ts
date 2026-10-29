@@ -1,5 +1,5 @@
 import { DEFAULT_COLUMNS, DEFAULT_GAP, DEFAULT_ROW_HEIGHT, LAYOUT_VERSION } from '@/constants';
-import { cloneJson } from '@daracl/core/utils';
+import { cloneJson, isArray, isPlainObject, isString } from '@daracl/core/utils';
 import {
   DriftBreakpoint,
   DriftGeometry,
@@ -11,7 +11,6 @@ import {
 import { collides } from './geometry';
 import { normalizeItems } from './operations';
 
-const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isInt = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v);
 
 /** 부분 입력으로 유효한 레이아웃을 만든다. 항목은 정규화/압축된다 */
@@ -39,11 +38,11 @@ function nonNegative(v: unknown, fallback: number): number {
 
 /** id 가 없거나 중복인 항목은 버린다 */
 function sanitizeItems(items: unknown): DriftItem[] {
-  if (!Array.isArray(items)) return [];
+  if (!isArray(items)) return [];
   const seen = new Set<string>();
   const result: DriftItem[] = [];
   for (const raw of items) {
-    if (!isObj(raw) || typeof raw.id !== 'string' || raw.id === '' || seen.has(raw.id)) continue;
+    if (!isPlainObject(raw) || !isString(raw.id) || raw.id === '' || seen.has(raw.id)) continue;
     seen.add(raw.id);
     result.push(raw as unknown as DriftItem);
   }
@@ -58,13 +57,13 @@ export function cloneLayout(layout: DriftLayout): DriftLayout {
 /** 레이아웃 유효성을 검사한다. 보정 없이 문제를 모두 수집한다 */
 export function validateLayout(layout: unknown): DriftValidationResult {
   const errors: string[] = [];
-  if (!isObj(layout)) return { valid: false, errors: ['layout 은 객체여야 합니다.'] };
+  if (!isPlainObject(layout)) return { valid: false, errors: ['layout 은 객체여야 합니다.'] };
 
   if (layout.version !== LAYOUT_VERSION) errors.push(`지원하지 않는 version: ${String(layout.version)}`);
   if (!isInt(layout.columns) || layout.columns < 1) errors.push('columns 는 1 이상의 정수여야 합니다.');
   if (typeof layout.rowHeight !== 'number' || !(layout.rowHeight > 0)) errors.push('rowHeight 는 0 보다 커야 합니다.');
   if (typeof layout.gap !== 'number' || !(layout.gap >= 0)) errors.push('gap 은 0 이상이어야 합니다.');
-  if (!Array.isArray(layout.items)) {
+  if (!isArray(layout.items)) {
     errors.push('items 는 배열이어야 합니다.');
     return { valid: false, errors };
   }
@@ -73,9 +72,9 @@ export function validateLayout(layout: unknown): DriftValidationResult {
   const ids = new Set<string>();
   const items = layout.items as unknown[];
   items.forEach((raw, index) => {
-    if (!isObj(raw)) return errors.push(`items[${index}] 는 객체여야 합니다.`);
+    if (!isPlainObject(raw)) return errors.push(`items[${index}] 는 객체여야 합니다.`);
     const label = `items[${index}](${String(raw.id)})`;
-    if (typeof raw.id !== 'string' || raw.id === '') errors.push(`${label}: id 가 필요합니다.`);
+    if (!isString(raw.id) || raw.id === '') errors.push(`${label}: id 가 필요합니다.`);
     else if (ids.has(raw.id)) errors.push(`${label}: id 가 중복되었습니다.`);
     else ids.add(raw.id);
 
@@ -87,13 +86,13 @@ export function validateLayout(layout: unknown): DriftValidationResult {
         errors.push(`${label}: 컬럼 범위를 벗어났습니다.`);
     }
     if (isInt(raw.y) && isInt(raw.h) && (raw.y < 0 || raw.h < 1)) errors.push(`${label}: 행 범위가 잘못되었습니다.`);
-    if (raw.responsive !== undefined && !isObj(raw.responsive))
+    if (raw.responsive !== undefined && !isPlainObject(raw.responsive))
       errors.push(`${label}: responsive 형식이 잘못되었습니다.`);
   });
 
   // 겹침 검사 (좌표가 모두 정수인 항목만)
   const geos = items.filter(
-    (raw): raw is DriftItem => isObj(raw) && isInt(raw.x) && isInt(raw.y) && isInt(raw.w) && isInt(raw.h),
+    (raw): raw is DriftItem => isPlainObject(raw) && isInt(raw.x) && isInt(raw.y) && isInt(raw.w) && isInt(raw.h),
   );
   for (let i = 0; i < geos.length; i++) {
     for (let j = i + 1; j < geos.length; j++) {
@@ -102,10 +101,10 @@ export function validateLayout(layout: unknown): DriftValidationResult {
   }
 
   if (layout.breakpoints !== undefined) {
-    if (!Array.isArray(layout.breakpoints)) errors.push('breakpoints 는 배열이어야 합니다.');
+    if (!isArray(layout.breakpoints)) errors.push('breakpoints 는 배열이어야 합니다.');
     else {
       (layout.breakpoints as unknown[]).forEach((bp, i) => {
-        if (!isObj(bp) || typeof bp.name !== 'string' || !isInt(bp.maxWidth) || !isInt(bp.columns) || bp.columns < 1) {
+        if (!isPlainObject(bp) || !isString(bp.name) || !isInt(bp.maxWidth) || !isInt(bp.columns) || bp.columns < 1) {
           errors.push(`breakpoints[${i}] 형식이 잘못되었습니다.`);
         }
       });
@@ -126,14 +125,14 @@ export function serializeLayout(layout: DriftLayout, space?: number): string {
  */
 export function parseLayout(input: string | unknown): DriftLayout {
   let data: unknown = input;
-  if (typeof input === 'string') {
+  if (isString(input)) {
     try {
       data = JSON.parse(input);
     } catch (e) {
       throw new Error('[drift] 레이아웃 JSON 을 해석할 수 없습니다.');
     }
   }
-  if (!isObj(data)) throw new Error('[drift] 레이아웃은 객체여야 합니다.');
+  if (!isPlainObject(data)) throw new Error('[drift] 레이아웃은 객체여야 합니다.');
   if (data.version !== undefined && data.version !== LAYOUT_VERSION) {
     throw new Error(`[drift] 지원하지 않는 레이아웃 version: ${String(data.version)}`);
   }
@@ -148,11 +147,9 @@ export function parseLayout(input: string | unknown): DriftLayout {
 }
 
 function sanitizeBreakpoints(value: unknown): DriftBreakpoint[] | undefined {
-  if (!Array.isArray(value)) return undefined;
+  if (!isArray(value)) return undefined;
   return value
-    .filter(
-      (bp) => isObj(bp) && typeof bp.name === 'string' && isInt(bp.maxWidth) && isInt(bp.columns) && bp.columns > 0,
-    )
+    .filter((bp) => isPlainObject(bp) && isString(bp.name) && isInt(bp.maxWidth) && isInt(bp.columns) && bp.columns > 0)
     .map((bp) => ({ name: bp.name, maxWidth: bp.maxWidth, columns: bp.columns }));
 }
 
@@ -168,19 +165,19 @@ export function sanitizeItem(raw: DriftItem): DriftItem {
   if (raw.locked === true) item.locked = true;
   // true/false 모두 의미가 있다: 생략하면 locked 를 따르고, 명시하면 locked 와 무관하게 크기 조절 가능 여부를 정한다
   if (typeof raw.resizable === 'boolean') item.resizable = raw.resizable;
-  if (typeof raw.title === 'string') item.title = raw.title;
-  if (typeof raw.content === 'string') item.content = raw.content;
-  if (isObj(raw.props)) {
+  if (isString(raw.title)) item.title = raw.title;
+  if (isString(raw.content)) item.content = raw.content;
+  if (isPlainObject(raw.props)) {
     const props: Record<string, DriftPropValue> = {};
     for (const [k, v] of Object.entries(raw.props)) {
       if (v === null || ['string', 'number', 'boolean'].includes(typeof v)) props[k] = v as DriftPropValue;
     }
     item.props = props;
   }
-  if (isObj(raw.responsive)) {
+  if (isPlainObject(raw.responsive)) {
     const responsive: Record<string, DriftGeometry> = {};
     for (const [name, g] of Object.entries(raw.responsive)) {
-      if (isObj(g) && [g.x, g.y, g.w, g.h].every((n) => typeof n === 'number' && Number.isFinite(n))) {
+      if (isPlainObject(g) && [g.x, g.y, g.w, g.h].every((n) => typeof n === 'number' && Number.isFinite(n))) {
         responsive[name] = { x: g.x as number, y: g.y as number, w: g.w as number, h: g.h as number };
       }
     }

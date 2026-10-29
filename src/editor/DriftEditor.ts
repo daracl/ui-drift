@@ -1,5 +1,5 @@
 import { compact } from '@/core/compact';
-import { cloneJson } from '@daracl/core/utils';
+import { cloneJson, isArray, isFunction, isString } from '@daracl/core/utils';
 import { isMovable, isResizable as isItemResizable } from '@/core/flags';
 import { diffItems, itemsEqual, layoutsEqual } from '@/core/diff';
 import { addItem, moveItem, normalizeItems, removeItem, resizeItem, updateItem } from '@/core/operations';
@@ -384,7 +384,7 @@ export class DriftEditor {
       overlapping: false,
     };
     if (this.destroyed) return result;
-    if (!Array.isArray(items)) throw new Error('[drift] syncItems 에는 항목 배열이 필요합니다.');
+    if (!isArray(items)) throw new Error('[drift] syncItems 에는 항목 배열이 필요합니다.');
 
     const columns = this.layout.columns;
     const existing = new Map(this.layout.items.map((item) => [item.id, item]));
@@ -937,7 +937,7 @@ export class DriftEditor {
         snapshot,
         contentEl,
       );
-      if (typeof cleanup === 'function') st.cleanup = cleanup;
+      if (isFunction(cleanup)) st.cleanup = cleanup;
     } catch (e) {
       this.captureHookError(e);
     }
@@ -1142,7 +1142,7 @@ export class DriftEditor {
 }
 
 export function createDriftEditor(container: HTMLElement | string, options: DriftEditorOptions = {}): DriftEditor {
-  const el = typeof container === 'string' ? document.querySelector<HTMLElement>(container) : container;
+  const el = isString(container) ? document.querySelector<HTMLElement>(container) : container;
   if (!el) throw new Error(`[drift] 컨테이너를 찾을 수 없습니다: ${String(container)}`);
   return new DriftEditor(el, options);
 }

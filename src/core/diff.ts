@@ -1,12 +1,10 @@
 import { DriftChanges, DriftItem, DriftItemChange, DriftLayout } from '@t/DriftLayout';
-import { cloneJson } from '@daracl/core/utils';
-
-const isObj = (v: unknown): v is object => typeof v === 'object' && v !== null;
+import { cloneJson, isObject } from '@daracl/core/utils';
 
 /** 값 비교: 원시값은 ===, 객체(props, responsive 등)는 참조가 같으면 같고 아니면 JSON 으로 비교한다 */
 function valueEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true;
-  if (isObj(a) && isObj(b)) return JSON.stringify(a) === JSON.stringify(b);
+  if (isObject(a) && isObject(b)) return JSON.stringify(a) === JSON.stringify(b);
   return false;
 }
 

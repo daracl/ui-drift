@@ -1,3 +1,5 @@
+import { isString } from '@daracl/core/utils';
+
 /** 스크롤 영역 해석 결과. element 가 없으면 window(페이지)를 스크롤한다 */
 export interface ScrollTarget {
   element?: HTMLElement;
@@ -32,7 +34,7 @@ export function resolveScrollElement(container: HTMLElement, option?: string | H
   let found: HTMLElement | undefined;
   if (option instanceof HTMLElement) {
     found = option;
-  } else if (typeof option === 'string' && option) {
+  } else if (isString(option) && option) {
     try {
       found = container.closest<HTMLElement>(option) ?? undefined;
     } catch (err) {

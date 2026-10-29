@@ -4,7 +4,7 @@
 
 ## 의존성과 구현
 
-- 공개 npm의 `@daracl/core@0.0.10`을 고정 버전으로 설치한다(최초 연동 0.0.9에서 갱신).
+- 공개 npm의 `@daracl/core@0.0.12`를 고정 버전으로 설치한다(최초 연동 0.0.9에서 갱신).
 - `@daracl/core/utils`의 `cloneJson`, `clamp`, `camelToKebab`를 사용한다.
 - 레이아웃·변경 이벤트·외부 끌어오기 복사는 기존 JSON 직렬화 계약을 유지한다.
 - Viewer의 HTML 이스케이프는 작은따옴표와 백틱까지 보호하는 기존 구현을 유지한다.
@@ -24,9 +24,8 @@
 
 압축·충돌 알고리즘과 공개 API는 변경하지 않았다.
 
-## 0.0.10 갱신 검증
+## 0.0.12 갱신 검증
 
-공개 npm의 최신 배포 버전 0.0.10으로 package.json과 lockfile을 갱신했다.
+공개 npm의 최신 배포 버전 0.0.12로 package.json과 lockfile을 갱신했다(0.0.10에서 갱신).
 typecheck, lint, 전체 build, 배포 타입 선언 25개 검사 및 Jest 27개 스위트·374개 테스트가
-모두 통과했다. `npm ci --dry-run --ignore-scripts --offline`도 통과했다.
-이번 버전 갱신에서는 Playwright를 다시 실행하지 않았다.
+모두 통과했다. 이번 버전 갱신에서는 Playwright를 다시 실행하지 않았다.

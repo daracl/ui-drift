@@ -1,5 +1,5 @@
 import { addItem } from '@/core/operations';
-import { cloneJson } from '@daracl/core/utils';
+import { cloneJson, isFunction, isString } from '@daracl/core/utils';
 import { normalizeItem, toGridPosition, toPixelRect } from '@/core/geometry';
 import { DriftItem } from '@t/DriftLayout';
 import type { DriftDragInDropResult, DriftDragInItem, DriftDragInOptions, DriftDragInSource } from '@t/DriftEditor';
@@ -106,7 +106,7 @@ export class DragInController {
 
   private sourcesOf(entry: Entry): HTMLElement[] {
     const src = entry.source;
-    if (typeof src === 'string') return Array.from(document.querySelectorAll<HTMLElement>(src));
+    if (isString(src)) return Array.from(document.querySelectorAll<HTMLElement>(src));
     if (src instanceof Element) return [src as HTMLElement];
     return Array.from(src as ArrayLike<Element>) as HTMLElement[];
   }
@@ -114,7 +114,7 @@ export class DragInController {
   private find(target: Element): { entry: Entry; el: HTMLElement } | undefined {
     for (const entry of this.entries) {
       const src = entry.source;
-      if (typeof src === 'string') {
+      if (isString(src)) {
         const el = target.closest<HTMLElement>(src);
         if (el) return { entry, el };
       } else {
@@ -164,7 +164,7 @@ export class DragInController {
   /** 옵션/데이터 속성으로부터 추가할 항목 정의를 만든다 */
   private resolveInput(s: Session): DriftItemInput {
     const opt = s.entry.options.item;
-    const base = typeof opt === 'function' ? opt(s.el) : opt || {};
+    const base = isFunction(opt) ? opt(s.el) : opt || {};
     const d = s.el.dataset;
     const num = (v?: string) => (v !== undefined && v !== '' && Number.isFinite(Number(v)) ? Number(v) : undefined);
     const w = base.w ?? num(d.w) ?? 3;

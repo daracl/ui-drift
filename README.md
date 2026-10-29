@@ -24,7 +24,7 @@ npm run build
 npm run dev
 ```
 
-`@daracl/core`는 공개 npm 레지스트리의 `0.0.10` 버전을 사용한다. 별도 corejs 체크아웃이나
+`@daracl/core`는 공개 npm 레지스트리의 `0.0.12` 버전을 사용한다. 별도 corejs 체크아웃이나
 `npm link`, `file:`, 로컬 경로 alias 없이 설치된다. `package-lock.json`을 함께 커밋하여 팀과 CI가
 같은 의존성을 설치한다. 공통 모듈 변경 시 corejs를 먼저 배포한 뒤 여기서 버전과 lockfile을 갱신한다.
 Vite는 공통 유틸을 ESM/CJS/UMD에 번들링하므로 UMD 사용자에게 별도 전역 스크립트는 필요 없다.
