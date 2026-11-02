@@ -93,6 +93,6 @@
     "audit:security:all": "npm audit"
   },
   "dependencies": {
-    "@daracl/core": "0.0.12"
+    "@daracl/core": "0.0.13"
   }
 }
