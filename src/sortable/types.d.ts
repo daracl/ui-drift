@@ -94,6 +94,13 @@ export interface SortableOptions {
   chosenClass?: string;
   /** 포인터를 따라다니는 복제본에 붙는 클래스. 기본 'dsr-drag' */
   dragClass?: string;
+  /**
+   * 포인터를 따라다니는 복제본을 만드는 방식. 기본 'clone'.
+   * - 'clone': 항목을 깊은 복사한다. iframe/video/audio/object/embed 는 같은 크기의 빈 상자로, canvas 도 같은 크기의 빈 상자로 바꿔 가볍게 만든다. 그림이 필요하면 함수 방식으로 직접 만든다
+   * - 'box': 내용 없이 항목 껍데기(태그, class, style)만 복사한다. 항목이 아주 무겁거나 많을 때 가장 가볍다
+   * - 함수: 직접 만든 가벼운 미리보기 요소를 돌려준다 (예: 제목만 있는 카드)
+   */
+  mirror?: 'clone' | 'box' | ((item: HTMLElement) => HTMLElement);
   /** 포인터를 따라다니는 복제본을 붙일 요소. 기본 document.body */
   appendTo?: HTMLElement;
   /**

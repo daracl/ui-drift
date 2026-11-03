@@ -18,6 +18,13 @@ export function snapshotRects(lists: Iterable<Element>): Map<HTMLElement, DOMRec
   return rects;
 }
 
+/** 지정한 요소들의 현재 화면 위치만 기록한다. 큰 목록에서 실제로 움직이는 요소만 애니메이션할 때 쓴다 */
+export function snapshotElements(elements: Iterable<HTMLElement>): Map<HTMLElement, DOMRect> {
+  const rects = new Map<HTMLElement, DOMRect>();
+  for (const el of elements) rects.set(el, el.getBoundingClientRect());
+  return rects;
+}
+
 /** snapshotRects 이후 DOM 이 바뀐 결과로 움직인 요소들을 이전 위치에서 현재 위치로 애니메이션한다 */
 export function playFlip(before: Map<HTMLElement, DOMRect>, duration: number, easing: string): void {
   if (!(duration > 0)) return;

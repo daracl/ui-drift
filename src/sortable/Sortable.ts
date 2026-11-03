@@ -1,11 +1,12 @@
 import { AutoScroller } from '@/dom/autoScroll';
-import { isAnimating, playFlip, snapshotRects } from '@/dom/flip';
+import { isAnimating, playFlip, snapshotElements, snapshotRects } from '@/dom/flip';
 import { disableScrollAnchoring, restoreScrollAnchoring, ScrollAnchorHold } from '@/dom/scrollAnchor';
 import { Emitter } from '@/event/Emitter';
 import type { SortableEvent, SortableEventMap, SortableMoveEvent, SortableOptions } from '@/sortable/types';
 import { CLS } from './classNames';
-import { detectAxis, decideSide, InsertSide } from './direction';
+import { Axis, detectAxis, decideSide, InsertSide } from './direction';
 import { checkTransfer, resolveGroup, ResolvedGroup } from './group';
+import { createMirrorItem } from './mirror';
 
 /** 어떤 설정이든 항상 드래그를 시작하지 않는 입력 요소 */
 const NO_DRAG = 'input,textarea,select,option,[contenteditable="true"],[data-sortable-no-drag]';
@@ -58,6 +59,8 @@ interface Session {
   startY: number;
   clientX: number;
   clientY: number;
+  /** 목록별 배치 방향 캐시 (드래그 중에는 바뀌지 않으므로 getComputedStyle 을 매 이동마다 부르지 않는다) */
+  axes: Map<HTMLElement, Axis>;
   /** 애니메이션 때문에 판정을 미룬 경우 true. 다음 프레임에 다시 판정한다 */
   retry?: boolean;
   /** 위치 판정에 쓰는 좌표. containment 가 있으면 포인터를 범위 안으로 맞춘 값이다 */
@@ -148,7 +151,7 @@ export class Sortable {
     );
 
     if (typeof MutationObserver !== 'undefined') {
-      this.observer = new MutationObserver(() => this.syncTouch(false));
+      this.observer = new MutationObserver((records) => this.markAdded(records));
       this.observer.observe(el, { childList: true });
     }
   }
@@ -253,6 +256,19 @@ export class Sortable {
     }
   }
 
+  /** 순서가 바뀔 때마다 모든 항목을 다시 훑지 않고, 새로 들어온 항목의 handle 만 표시한다 */
+  private markAdded(records: MutationRecord[]): void {
+    const { handle, delay, draggable } = this.options;
+    if (!handle || delay > 0) return;
+    for (const record of records) {
+      record.addedNodes.forEach((node) => {
+        if (node instanceof HTMLElement && (!draggable || node.matches(draggable))) {
+          node.querySelectorAll(handle).forEach((h) => h.classList.add(CLS.handle));
+        }
+      });
+    }
+  }
+
   private fire<K extends keyof SortableEventMap>(name: K, evt: SortableEvent): void {
     const cb = this.options[HANDLERS[name]] as ((e: SortableEvent) => void) | undefined;
     if (typeof cb === 'function') cb.call(this, evt);
@@ -307,6 +323,7 @@ export class Sortable {
       clientY: e.clientY,
       px: e.clientX,
       py: e.clientY,
+      axes: new Map(),
       width: 0,
       height: 0,
       grabX: 0,
@@ -390,7 +407,7 @@ export class Sortable {
     s.oldIndex = this.indexOf(item);
     s.oldNext = item.nextSibling;
 
-    const mirrorItem = item.cloneNode(true) as HTMLElement;
+    const mirrorItem = createMirrorItem(item, this.options.mirror);
     toggleClasses(mirrorItem, this.options.chosenClass, false);
     toggleClasses(mirrorItem, this.options.ghostClass, false);
     toggleClasses(mirrorItem, this.options.dragClass, true);
@@ -425,6 +442,10 @@ export class Sortable {
       pointerEvents: 'none',
       zIndex: '2147483647',
       transition: 'none',
+      // 복제본은 이동만 하므로 자기 합성 레이어로 올리고(transform 만 바뀜), 내부 레이아웃을 바깥과 격리한다
+      willChange: 'transform',
+      cursor: 'grabbing',
+      contain: 'layout style',
       transform: `translate3d(${rect.left}px, ${rect.top}px, 0)`,
     });
     (this.options.appendTo || document.body).appendChild(mirror);
@@ -547,22 +568,31 @@ export class Sortable {
     const target = this.findItem(hit);
     if (target === dragged) return;
 
-    const others = this.items().filter((i) => i !== dragged);
     let side: InsertSide;
     let ref: Node | null;
 
     // 포인터가 항목이 아닌 곳(여백, 항목 사이 틈, 목록 가장자리)에 있으면 가장 가까운 항목을 기준으로 삼는다.
     // 이렇게 하면 빈 곳에서도 일반 항목 위와 같은 '이동하는 방향으로 기준선을 넘었을 때만' 규칙이 적용되어,
     // 여러 줄 배치에서 같은 줄 이웃을 지나지 않았는데 맨 앞/맨 뒤로 튀는 일이 없다.
-    const anchor = target ?? this.nearestItem(others, x, y);
+    const anchor =
+      target ??
+      this.nearestItem(
+        this.items().filter((i) => i !== dragged),
+        x,
+        y,
+      );
 
     if (!this.options.sort || !anchor) {
       // 정렬 없이 들어오는 목록이거나 비어 있는 목록: 맨 뒤에 넣는다
-      const last = others[others.length - 1];
+      const last = this.lastItem(dragged);
       side = 'after';
       ref = last ? last.nextSibling : null;
     } else {
-      const axis = detectAxis(this.el, anchor, this.options.direction);
+      let axis = s.axes.get(this.el);
+      if (!axis) {
+        axis = detectAxis(this.el, anchor, this.options.direction);
+        s.axes.set(this.el, axis);
+      }
       const draggedBefore = inThisList
         ? !!(dragged.compareDocumentPosition(anchor) & Node.DOCUMENT_POSITION_FOLLOWING)
         : null;
@@ -600,6 +630,15 @@ export class Sortable {
     this.place(s, ref, mode);
   }
 
+  /** excluded 를 뺀 마지막 항목. 끝에서부터 찾으므로 목록이 커도 거의 상수 시간이다 */
+  private lastItem(excluded: HTMLElement): HTMLElement | undefined {
+    const { draggable } = this.options;
+    for (let el = this.el.lastElementChild; el; el = el.previousElementSibling) {
+      if (el !== excluded && el instanceof HTMLElement && (!draggable || el.matches(draggable))) return el;
+    }
+    return undefined;
+  }
+
   /**
    * (x, y) 에 가장 가까운 항목. 항목이 없으면 null.
    * 여러 줄로 배치된 목록에서는 유클리드 거리로 고르면 같은 줄의 이웃보다 세로로 가까운 다른 줄 항목이 뽑혀 엉뚱한 곳으로
@@ -630,9 +669,7 @@ export class Sortable {
     const fromEl = item.parentElement;
     if (fromEl === this.el && (ref === item || ref === item.nextSibling)) return; // 이미 그 자리
 
-    const lists = new Set<Element>([this.el, s.source.el]);
-    if (fromEl) lists.add(fromEl);
-    const before = snapshotRects(lists);
+    const before = snapshotElements(this.movingElements(item, fromEl, ref));
 
     if (this === s.source || mode !== 'clone') this.removeClone(s);
     else this.putClone(s);
@@ -641,6 +678,31 @@ export class Sortable {
     this.el.insertBefore(item, ref);
     s.current = this;
     playFlip(before, s.source.options.animation, s.source.options.easing);
+  }
+
+  /**
+   * item 을 ref 앞으로 옮길 때 자리가 달라지는 요소들. 큰 목록에서 전체를 측정하고 transform 을 쓰면 교체마다 수천 개를
+   * 건드리므로, 위치가 실제로 바뀌는 구간만 고른다.
+   * - 같은 목록: 이전 자리와 새 자리 사이의 요소들
+   * - 다른 목록: 출발 목록에서 item 뒤의 요소들, 도착 목록에서 ref 와 그 뒤의 요소들
+   * (item 앞쪽 요소는 줄바꿈이 있어도 누적 너비가 같아 움직이지 않는다)
+   */
+  private movingElements(item: HTMLElement, fromEl: HTMLElement | null, ref: Node | null): HTMLElement[] {
+    const result: HTMLElement[] = [];
+    const push = (nodes: Element[]): void => nodes.forEach((n) => n instanceof HTMLElement && result.push(n));
+    const fromKids = fromEl ? Array.from(fromEl.children) : [];
+    const from = fromKids.indexOf(item);
+    if (fromEl === this.el) {
+      const to = ref ? fromKids.indexOf(ref as Element) : fromKids.length;
+      // item 은 ref '앞'에 들어가므로 ref 자신은 움직이지 않는다.
+      // 뒤로 가면 item 과 그 뒤 ~ ref 직전까지, 앞으로 가면 ref 부터 item 까지가 자리가 바뀐다
+      push(to > from ? fromKids.slice(from, to) : fromKids.slice(to, from + 1));
+    } else {
+      if (from >= 0) push(fromKids.slice(from));
+      const toKids = Array.from(this.el.children);
+      push(toKids.slice(ref ? Math.max(toKids.indexOf(ref as Element), 0) : toKids.length));
+    }
+    return result;
   }
 
   /** pull: 'clone' — 항목이 출발 목록을 떠나는 순간 원래 자리에 복제본을 남긴다 */

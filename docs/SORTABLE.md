@@ -42,7 +42,8 @@ sortable.destroy();
 | `swapThreshold` | `0.5` | 0~1. 클수록 일찍 자리를 바꾼다(1 에 가까우면 크기가 다른 항목에서 떨릴 수 있다) |
 | `ghostClass` / `chosenClass` / `dragClass` | `dsr-ghost` / `dsr-chosen` / `dsr-drag` | |
 | `containment` | `false` | 포인터를 따라다니는 복제본이 움직일 수 있는 범위. `true`(이 목록) · `'parent'`(부모 요소) · selector(`closest`) · `HTMLElement`. 아래 설명 참고 |
-| `appendTo` | `document.body` | 복제본을 붙일 요소. 항목 스타일이 부모 selector 에 의존하면 지정한다 |
+| `mirror` | `'clone'` | 포인터를 따라다니는 복제본을 만드는 방식. `'clone'`(가볍게 정리한 깊은 복사) · `'box'`(내용 없이 껍데기만) · `(item) => HTMLElement`(직접 만든 미리보기). 아래 [성능](#성능) 참고 |
+| `appendTo` | `document.body` | 복제본을 붙일 요소. 복제본은 원래 목록과 같은 태그/클래스의 빈 홀더 안에 들어가므로 `.list > li` 같은 부모 의존 스타일은 그대로 적용된다 |
 | `scroll` / `scrollSensitivity` / `scrollSpeed` | `true` / `30` / `360` | 가장자리 자동 스크롤. `scrollSpeed` 는 가장자리에 완전히 붙었을 때의 최대 속도(px/초)이며 화면 주사율과 무관하다. 가장자리 영역 안쪽 경계에서는 천천히 시작해 제곱 곡선으로 빨라진다 |
 | `dataIdAttr` | `data-id` | `toArray()` / `sort()` 가 쓰는 속성 |
 
@@ -109,9 +110,33 @@ src/sortable.ts         공개 엔트리, src/sortable.umd.ts 는 UMD 엔트리
 
 `src/sortable/` 은 `src/dom`, `src/event`, `@daracl/core/utils` 에만 의존하므로 나중에 폴더째 별도 패키지로 분리할 수 있다.
 
+## 성능
+
+항목이 수천 개이거나 항목 안에 무거운 내용(표, iframe, canvas)이 있어도 드래그가 끊기지 않도록 다음과 같이 처리한다.
+3000개 목록 + 무거운 항목에서 실제 브라우저로 잰 값이다(`e2e/sortable-perf.spec.ts` 가 회귀를 막는다).
+
+| 지표 | 최적화 전 | 최적화 후 |
+|---|---|---|
+| 드래그 시작 | 60~116ms | 약 30ms |
+| 이동 이벤트 평균 / 상위 5% / 최대 | 11~14 / 130~150 / 225~263ms | 약 2 / 14 / 23ms |
+
+- **복제본은 드래그 시작 때 한 번만 만든다.** 이후에는 `transform` 만 바꾼다(합성 레이어, `contain: layout style`).
+- **무거운 요소는 빈 상자로 바꾼다.** 복제된 `iframe` 은 body 에 붙는 순간 다시 로드되고 `video` 는 재생을 시작하므로, `iframe/video/audio/object/embed/canvas` 는 같은 크기의 빈 상자로 대체한다.
+  `canvas` 그림을 복사하지 않는 것도 의도다. `getContext`/`drawImage` 가 GPU 캔버스를 초기화하는 비용이 커서 드래그 시작이 수백 ms 걸렸다.
+  그림이 꼭 필요하면 `mirror: (item) => ...` 로 직접 만든다.
+- **`mirror: 'box'`** 는 내용을 복사하지 않아 가장 가볍다. 항목이 아주 무겁거나 내용이 복제본에 필요 없을 때 쓴다.
+- **복제본은 `aria-hidden` + `inert`** 라서 접근성 트리와 포커스를 늘리지 않는다.
+- **이동 애니메이션은 실제로 자리가 바뀌는 구간의 항목만** 측정하고 `transform` 을 쓴다(앞뒤 나머지는 건드리지 않는다).
+- **자리 판정은 항목 수와 무관하다.** 포인터 아래 항목만 보고 목록 전체를 훑지 않으며, 배치 방향은 드래그마다 한 번만 판정한다.
+- **자동 스크롤은 스크롤 가능한 조상 목록을 캐시**해 프레임마다 `getComputedStyle` 을 부르지 않는다.
+- **`html` 이나 목록의 상속 속성(`cursor`, `user-select`)을 바꾸지 않는다.** 드래그를 시작하는 순간 문서의 모든 요소가 스타일을 다시 계산되어 3000개 기준 수십 ms 가 더 걸린다.
+  텍스트 선택은 `selectstart` 를 막고 선택 영역을 지워서 처리하고, `grabbing` 커서는 복제본에만 준다. `html.dsr-dragging` 클래스는 사용자 코드를 위해 붙지만 `daracl.sortable.css` 의 규칙은 이 클래스에 의존하지 않는다.
+  직접 `html.dsr-dragging *` 같은 전역 규칙을 만들면 같은 비용을 치르게 된다.
+
 ## 알려진 한계
 
 - HTML5 Drag and Drop 폴백이 없다(Pointer Events 전용). 파일을 목록에 끌어 놓는 용도는 지원하지 않는다.
 - multi-drag, swap, 그리드 좌표 정렬은 없다.
 - 중첩 목록은 안쪽 목록의 항목을 잡으면 안쪽만 드래그되는 것까지만 테스트했다. 중첩 목록 사이의 이동은 검증하지 않았다.
+- 복제본에서 `canvas`/`iframe`/`video` 는 빈 상자로 보인다(위 [성능](#성능) 참고).
 - 실제 터치 기기에서의 동작은 자동 테스트로 검증하지 못했다(Playwright 는 마우스로만 검증).

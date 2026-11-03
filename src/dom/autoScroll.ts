@@ -10,6 +10,8 @@ type Axis = 'x' | 'y';
 
 /** 한 프레임에서 인정하는 최대 경과 시간(ms). 탭 전환 등으로 프레임이 오래 멈췄다가 재개될 때 한꺼번에 튀지 않게 한다 */
 const MAX_FRAME_MS = 50;
+/** 스크롤 가능한 조상 목록을 다시 조사하는 간격(ms). 드래그 중 내용 크기가 바뀌어 스크롤 여부가 달라질 수 있어 가끔 갱신한다 */
+const CHAIN_REFRESH_MS = 300;
 /** 첫 프레임에 가정하는 경과 시간(ms) */
 const FIRST_FRAME_MS = 16;
 
@@ -55,8 +57,18 @@ function ease(ratio: number): number {
  * 속도는 px/초이고 경과 시간(rAF 타임스탬프)으로 환산하므로 60Hz 와 144Hz 에서 같은 속도로 움직인다.
  * 한 프레임에 1px 미만인 이동은 버리지 않고 다음 프레임에 누적한다.
  */
+interface ScrollLink {
+  el: Element;
+  y: boolean;
+  x: boolean;
+}
+
 export class AutoScroller {
   private last = 0;
+  /** start 에서 위로 올라가며 찾은, 실제로 스크롤 가능한 조상들. 프레임마다 getComputedStyle 을 부르지 않도록 캐시한다 */
+  private chain: ScrollLink[] = [];
+  private chainStart: Element | null = null;
+  private chainAt = -Infinity;
   private remainder: Record<Axis, number> = { x: 0, y: 0 };
 
   constructor(private readonly options: AutoScrollOptions) {}
@@ -65,6 +77,20 @@ export class AutoScroller {
   reset(): void {
     this.last = 0;
     this.remainder = { x: 0, y: 0 };
+    this.chainStart = null;
+    this.chainAt = -Infinity;
+  }
+
+  private refreshChain(start: Element | null, now: number): void {
+    if (start === this.chainStart && now - this.chainAt < CHAIN_REFRESH_MS) return;
+    this.chainStart = start;
+    this.chainAt = now;
+    this.chain = [];
+    for (let el = start; el && !isPageRoot(el); el = el.parentElement) {
+      const y = canScroll(el, 'y');
+      const x = canScroll(el, 'x');
+      if (y || x) this.chain.push({ el, y, x });
+    }
   }
 
   /** now: requestAnimationFrame 이 전달하는 타임스탬프(ms). 실제로 스크롤했으면 true */
@@ -87,13 +113,15 @@ export class AutoScroller {
       }
     };
 
-    for (let el = start; el && !isPageRoot(el) && !(moved.x && moved.y); el = el.parentElement) {
+    this.refreshChain(start, now);
+    for (const { el, x: scrollX, y: scrollY } of this.chain) {
+      if (moved.x && moved.y) break;
       const rect = el.getBoundingClientRect();
-      if (!moved.y && canScroll(el, 'y')) {
+      if (!moved.y && scrollY) {
         const v = edgeVelocity(y, Math.max(rect.top, 0), Math.min(rect.bottom, window.innerHeight), this.options);
         tryScroll(el, 'y', v, (px) => ((el as Element).scrollTop += px));
       }
-      if (!moved.x && canScroll(el, 'x')) {
+      if (!moved.x && scrollX) {
         const v = edgeVelocity(x, Math.max(rect.left, 0), Math.min(rect.right, window.innerWidth), this.options);
         tryScroll(el, 'x', v, (px) => ((el as Element).scrollLeft += px));
       }
