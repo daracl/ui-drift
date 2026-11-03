@@ -2,6 +2,11 @@
 
 const timers = new WeakMap<HTMLElement, number>();
 
+/** 이동 애니메이션이 진행 중인 요소인지. 진행 중에는 getBoundingClientRect 가 이동 중간 위치를 돌려주므로 위치 판정에 쓰면 안 된다 */
+export function isAnimating(el: HTMLElement): boolean {
+  return timers.has(el);
+}
+
 /** 각 목록의 자식 요소들의 현재 화면 위치를 기록한다 (진행 중인 transform 도 포함된 '눈에 보이는' 위치) */
 export function snapshotRects(lists: Iterable<Element>): Map<HTMLElement, DOMRect> {
   const rects = new Map<HTMLElement, DOMRect>();

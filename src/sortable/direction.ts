@@ -35,9 +35,24 @@ export function decideSide(
   y: number,
   draggedBeforeTarget: boolean | null,
   threshold: number,
+  draggedRect?: DOMRect,
 ): InsertSide | null {
   const size = axis === 'vertical' ? rect.height : rect.width;
   if (!(size > 0)) return null;
+
+  // 여러 줄로 배치된 목록(flex-wrap, grid)에서 끌고 있는 항목과 대상이 다른 줄이면 가로 위치는 의미가 없다.
+  // 줄을 넘나들 때는 세로 위치로 판정하고, 대상이 놓인 줄에 들어서면 곧바로 자리를 바꾼다.
+  // (swapThreshold 와 1 사이의 중간값. 기본 0.5 → 0.75. 자리를 바꾸면 끌고 있는 항목이 대상 칸을 차지하므로 다시 뒤집히지 않는다)
+  if (axis === 'horizontal' && draggedRect && draggedBeforeTarget !== null && rect.height > 0) {
+    const overlap = Math.min(rect.bottom, draggedRect.bottom) - Math.max(rect.top, draggedRect.top);
+    const sameRow = overlap > Math.min(rect.height, draggedRect.height) / 2;
+    if (!sameRow) {
+      const enter = threshold + (1 - threshold) / 2;
+      const ratioY = (y - rect.top) / rect.height;
+      if (draggedBeforeTarget) return ratioY > 1 - enter ? 'after' : null; // 아래 줄로 내려가는 중
+      return ratioY < enter ? 'before' : null; // 위 줄로 올라가는 중
+    }
+  }
   const ratio = ((axis === 'vertical' ? y - rect.top : x - rect.left) / size) as number;
   if (draggedBeforeTarget === null) return ratio > 0.5 ? 'after' : 'before';
   if (draggedBeforeTarget) return ratio > 1 - threshold ? 'after' : null;

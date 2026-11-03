@@ -1,5 +1,5 @@
 import { AutoScroller } from '@/dom/autoScroll';
-import { playFlip, snapshotRects } from '@/dom/flip';
+import { isAnimating, playFlip, snapshotRects } from '@/dom/flip';
 import { disableScrollAnchoring, restoreScrollAnchoring, ScrollAnchorHold } from '@/dom/scrollAnchor';
 import { Emitter } from '@/event/Emitter';
 import type { SortableEvent, SortableEventMap, SortableMoveEvent, SortableOptions } from '@/sortable/types';
@@ -58,6 +58,8 @@ interface Session {
   startY: number;
   clientX: number;
   clientY: number;
+  /** 애니메이션 때문에 판정을 미룬 경우 true. 다음 프레임에 다시 판정한다 */
+  retry?: boolean;
   /** 위치 판정에 쓰는 좌표. containment 가 있으면 포인터를 범위 안으로 맞춘 값이다 */
   px: number;
   py: number;
@@ -452,6 +454,10 @@ export class Sortable {
     });
     const tick = (now: number): void => {
       if (activeSession !== s || !s.active) return;
+      if (s.retry) {
+        s.retry = false;
+        this.hitTest(s); // 이동 애니메이션 때문에 미뤘던 판정을 다시 한다 (아직 진행 중이면 over() 가 다시 미룬다)
+      }
       if (opts.scroll && scroller.step(s.hit ?? s.item, s.clientX, s.clientY, now)) {
         this.follow(s); // 스크롤로 범위 요소/항목 위치가 바뀌었을 수 있으므로 복제본 위치와 판정을 다시 계산한다
         this.hitTest(s);
@@ -560,7 +566,20 @@ export class Sortable {
       const draggedBefore = inThisList
         ? !!(dragged.compareDocumentPosition(anchor) & Node.DOCUMENT_POSITION_FOLLOWING)
         : null;
-      const decided = decideSide(axis, anchor.getBoundingClientRect(), x, y, draggedBefore, this.options.swapThreshold);
+      // 이동 애니메이션 중인 요소의 위치는 이동 중간값이라 판정이 앞뒤로 뒤집혀 흔들린다. 끝난 뒤 다시 판정한다.
+      if (isAnimating(anchor) || (inThisList && axis === 'horizontal' && isAnimating(dragged))) {
+        s.retry = true;
+        return;
+      }
+      const decided = decideSide(
+        axis,
+        anchor.getBoundingClientRect(),
+        x,
+        y,
+        draggedBefore,
+        this.options.swapThreshold,
+        inThisList ? dragged.getBoundingClientRect() : undefined,
+      );
       if (!decided) return;
       side = decided;
       ref = side === 'after' ? anchor.nextSibling : anchor;
