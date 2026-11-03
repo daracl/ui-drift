@@ -4,7 +4,7 @@ module.exports = {
   preset: 'ts-jest',
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
-    '^@t/(.*)$': '<rootDir>/src/types/$1',
+    '^@t/(.*)$': '<rootDir>/src/drift/types/$1',
   },
   moduleFileExtensions: ['js', 'json', 'ts'],
   testMatch: ['<rootDir>/test/**/*.test.ts'],

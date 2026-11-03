@@ -1,7 +1,7 @@
 import { clamp, cloneJson } from '@daracl/core/utils';
-import { clamp as driftClamp } from '../../src/core/geometry';
-import { cloneLayout, createLayout } from '../../src/core/layout';
-import { escapeHtml, toDataAttribute } from '../../src/viewer/escape';
+import { clamp as driftClamp } from '../../src/drift/core/geometry';
+import { cloneLayout, createLayout } from '../../src/drift/core/layout';
+import { escapeHtml, toDataAttribute } from '../../src/drift/viewer/escape';
 
 describe('공통 유틸 연동 계약', () => {
   it('공개 clamp를 유지하고 공통 구현을 사용한다', () => {

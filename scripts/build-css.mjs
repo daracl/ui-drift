@@ -9,6 +9,8 @@ export async function buildCss() {
   await Promise.all(
     [
       ['daracl.drift.scss', 'daracl.drift.css', 'expanded'],
+      ['daracl.sortable.scss', 'daracl.sortable.css', 'expanded'],
+      ['daracl.sortable.scss', 'daracl.sortable.min.css', 'compressed'],
       ['daracl.drift.scss', 'daracl.drift.min.css', 'compressed'],
       ['daracl.drift.viewer.scss', 'daracl.drift.viewer.min.css', 'compressed'],
     ].map(async ([source, target, style]) => {

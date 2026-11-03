@@ -1,6 +1,6 @@
 {
   "name": "@daracl/drift",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Daracl Drift - drag & drop layout editor with a CSS-only viewer",
   "author": {
     "name": "daracl",
@@ -41,8 +41,16 @@
       "import": "./dist/viewer.js",
       "require": "./dist/viewer.cjs"
     },
+    "./sortable": {
+      "types": "./dist/sortable.d.ts",
+      "import": "./dist/sortable.js",
+      "require": "./dist/sortable.cjs"
+    },
     "./umd": {
       "import": "./dist/daracl.drift.umd.js"
+    },
+    "./sortable/umd": {
+      "import": "./dist/daracl.sortable.umd.js"
     },
     "./dist/": "./dist/",
     "./style/": "./style/"

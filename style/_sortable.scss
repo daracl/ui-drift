@@ -1,0 +1,44 @@
+/**
+ * Sortable 스타일. 클래스명은 src/sortable/classNames.ts 와 일치해야 한다.
+ */
+$dsr-ghost-opacity: 0.4 !default;
+$dsr-drag-shadow: 0 8px 24px rgba(15, 23, 42, 0.25) !default;
+$dsr-accent: #2563eb !default;
+
+/* 터치 드래그 영역: 브라우저 스크롤이 포인터 이벤트를 가로채지 않게 한다 (handle 이 있으면 handle 만) */
+.dsr-touch-none > *,
+.dsr-handle {
+  touch-action: none;
+}
+
+.dsr-handle {
+  cursor: grab;
+}
+
+.dsr-touch-none > * {
+  cursor: grab;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* 원래 자리(자리 표시자) */
+.dsr-ghost {
+  opacity: $dsr-ghost-opacity;
+  outline: 2px dashed $dsr-accent;
+  outline-offset: -2px;
+}
+
+/* 포인터를 따라다니는 복제본 */
+.dsr-drag {
+  opacity: 0.92;
+  box-shadow: $dsr-drag-shadow;
+  cursor: grabbing;
+  will-change: transform;
+}
+
+html.dsr-dragging,
+html.dsr-dragging * {
+  cursor: grabbing !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}

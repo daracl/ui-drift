@@ -21,6 +21,7 @@ export default defineConfig({
         index: path.resolve(__dirname, 'src/index.ts'),
         core: path.resolve(__dirname, 'src/core.ts'),
         viewer: path.resolve(__dirname, 'src/viewer.ts'),
+        sortable: path.resolve(__dirname, 'src/sortable.ts'),
       },
       formats: ['es', 'cjs'],
       fileName: (format, name) => (format === 'es' ? `${name}.js` : `${name}.cjs`),

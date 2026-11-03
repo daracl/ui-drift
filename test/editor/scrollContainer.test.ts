@@ -1,5 +1,5 @@
 import { createDriftEditor, DriftEditor } from '@/index';
-import { resolveScrollTarget } from '@/editor/scrollContainer';
+import { resolveScrollTarget } from '@/drift/editor/scrollContainer';
 
 /** jsdom 은 레이아웃이 없으므로 스크롤 영역의 크기/위치를 직접 지정한다 */
 function makeScroller(cls: string, rect = { top: 0, bottom: 300 }, scrollHeight = 1000): HTMLElement {

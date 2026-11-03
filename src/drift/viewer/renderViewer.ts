@@ -1,7 +1,7 @@
-import { TITLE_HEIGHT } from '@/constants';
-import { compareYX } from '@/core/geometry';
-import { parseLayout } from '@/core/layout';
-import { getBreakpoints, resolveItems } from '@/core/responsive';
+import { TITLE_HEIGHT } from '@/drift/constants';
+import { compareYX } from '@/drift/core/geometry';
+import { parseLayout } from '@/drift/core/layout';
+import { getBreakpoints, resolveItems } from '@/drift/core/responsive';
 import { DriftGeometry, DriftItem, DriftLayout } from '@t/DriftLayout';
 import { assertScope, escapeHtml, toDataAttribute } from './escape';
 

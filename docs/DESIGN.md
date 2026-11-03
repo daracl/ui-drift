@@ -8,8 +8,8 @@
 | 빌드 | Vite lib (ESM/CJS) + UMD 별도 설정, `tsc --emitDeclarationOnly` | Vite 7 다중 entry + `tsc-alias`, 번들/CSS/선언 병렬 생성 |
 | 스타일 | SCSS → `daracl.grid(.min).css` | SCSS → `daracl.drift(.min).css`, `daracl.drift.viewer.min.css` |
 | 테스트 | Jest(ts-jest, jsdom) + Playwright, `uitest/*.html` 수동 페이지 | 동일 |
-| 별칭 | `@/` → `src/`, `@t/` → `src/types/` | 동일 |
-| 타입 | `src/types/*.d.ts` | 동일 |
+| 별칭 | `@/` → `src/`, `@t/` → `src/drift/types/` | 동일 |
+| 타입 | `src/drift/types/*.d.ts` | 동일 |
 | 포맷 | prettier(세미콜론, single quote, 120), eslint | 설정 파일 그대로 복사 |
 | 포인터 | `PointerContext/Handler/Session` 상태 머신 | Pointer Events 기반 `DragSession` / `ResizeSession` |
 | 의존성 | `@daracl/core/utils`의 필요한 함수만 번들링 | 같은 공통 유틸을 번들링하며 DOM 코드 제외 |

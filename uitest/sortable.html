@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sortable 수동/시각 테스트</title>
+    <style>
+      body { font-family: system-ui, sans-serif; padding: 16px; margin: 0; }
+      h3 { margin: 16px 0 6px; }
+      .row { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; margin-bottom: 16px; }
+      .col { width: 220px; }
+      .list { border: 1px solid #d0d7de; border-radius: 6px; padding: 6px; min-height: 40px; background: #f8fafc; }
+      .list > li, .list > div { list-style: none; background: #fff; border: 1px solid #d0d7de; border-radius: 6px; padding: 8px 10px; margin: 4px 0; }
+      ul.list { margin: 0; padding: 6px; }
+      .grip { display: inline-block; width: 18px; color: #94a3b8; }
+      .hz { display: flex; gap: 6px; flex-wrap: wrap; width: 460px; }
+      .hz > div { margin: 0 !important; min-width: 70px; text-align: center; }
+      .scroll { height: 140px; overflow-y: auto; }
+      #log { font: 12px/1.5 ui-monospace, monospace; white-space: pre-wrap; max-height: 160px; overflow: auto; background: #0f172a; color: #e2e8f0; padding: 8px; border-radius: 6px; margin-top: 12px; }
+    </style>
+  </head>
+  <body>
+    <h3>Sortable 데모 <a href="/uitest/index.html" style="font-size: 12px">← 목록</a></h3>
+
+    <div class="row">
+      <div class="col">
+        <b>1. 기본 (항목 전체 드래그)</b>
+        <ul class="list" id="basic">
+          <li data-id="a">Item A</li>
+          <li data-id="b">Item B</li>
+          <li data-id="c">Item C</li>
+          <li data-id="d">Item D</li>
+        </ul>
+      </div>
+      <div class="col">
+        <b>2. handle (⠿ 만 드래그)</b>
+        <ul class="list" id="handle">
+          <li data-id="h1"><span class="grip">⠿</span>Task 1 <input placeholder="입력 가능" size="8" /></li>
+          <li data-id="h2"><span class="grip">⠿</span>Task 2</li>
+          <li data-id="h3"><span class="grip">⠿</span>Task 3</li>
+        </ul>
+      </div>
+      <div class="col">
+        <b>3. 그룹 shared (A ⇄ B)</b>
+        <div class="list" id="shared-a" style="margin-bottom: 8px">
+          <div data-id="s1">Shared 1</div>
+          <div data-id="s2">Shared 2</div>
+          <div data-id="s3">Shared 3</div>
+        </div>
+        <div class="list" id="shared-b">
+          <div data-id="s4">Shared 4</div>
+          <div data-id="s5">Shared 5</div>
+        </div>
+      </div>
+      <div class="col">
+        <b>4. clone (소스 → 대상)</b>
+        <div class="list" id="clone-src">
+          <div data-id="k1">Clone 1</div>
+          <div data-id="k2">Clone 2</div>
+        </div>
+        <div class="list" id="clone-dst" style="margin-top: 8px">
+          <div data-id="k9">Existing</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <b>5. 가로 / 줄바꿈 (flex-wrap, direction 자동)</b>
+        <div class="list hz" id="wrap">
+          <div data-id="w1">1</div>
+          <div data-id="w2">2</div>
+          <div data-id="w3">3</div>
+          <div data-id="w4">4</div>
+          <div data-id="w5">5</div>
+          <div data-id="w6">6</div>
+          <div data-id="w7">7</div>
+          <div data-id="w8">8</div>
+        </div>
+      </div>
+      <div class="col">
+        <b>6. 스크롤 영역 (가장자리 자동 스크롤)</b>
+        <div class="list scroll" id="scroller">
+          <div data-id="r1">Row 1</div>
+          <div data-id="r2">Row 2</div>
+          <div data-id="r3">Row 3</div>
+          <div data-id="r4">Row 4</div>
+          <div data-id="r5">Row 5</div>
+          <div data-id="r6">Row 6</div>
+          <div data-id="r7">Row 7</div>
+          <div data-id="r8">Row 8</div>
+          <div data-id="r9">Row 9</div>
+          <div data-id="r10">Row 10</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col">
+        <b>7. containment: true (복제본이 목록 밖으로 못 나감)</b>
+        <ul class="list" id="contained">
+          <li data-id="c1">Contained 1</li>
+          <li data-id="c2">Contained 2</li>
+          <li data-id="c3">Contained 3</li>
+          <li data-id="c4">Contained 4</li>
+        </ul>
+      </div>
+      <div>
+        <b>8. containment: '.zone' (두 목록 사이만 이동, 3번 shared 목록으로는 못 나감)</b>
+        <div class="zone" style="display: flex; gap: 16px; padding: 12px; border: 2px dashed #94a3b8; border-radius: 8px">
+          <div class="list" id="zone-a" style="width: 200px">
+            <div data-id="z1">Zone 1</div>
+            <div data-id="z2">Zone 2</div>
+          </div>
+          <div class="list" id="zone-b" style="width: 200px">
+            <div data-id="z3">Zone 3</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="log"></div>
+
+    <script type="module">
+      import '/style/daracl.sortable.scss';
+      import { createSortable } from '/src/sortable.ts';
+
+      const log = document.getElementById('log');
+      const write = (name) => (evt) => {
+        log.textContent += `${evt.from.id}→${evt.to.id} ${name} ${evt.oldIndex}→${evt.newIndex}${evt.cancelled ? ' (cancelled)' : ''}\n`;
+        log.scrollTop = log.scrollHeight;
+      };
+      const events = { onAdd: write('add'), onUpdate: write('update'), onRemove: write('remove'), onEnd: write('end') };
+
+      const lists = {
+        basic: createSortable('#basic', { ...events }),
+        handle: createSortable('#handle', { handle: '.grip', ...events }),
+        sharedA: createSortable('#shared-a', { group: 'shared', ...events }),
+        sharedB: createSortable('#shared-b', { group: 'shared', ...events }),
+        cloneSrc: createSortable('#clone-src', { group: { name: 'clone', pull: 'clone', put: false }, sort: false, ...events }),
+        cloneDst: createSortable('#clone-dst', { group: { name: 'clone', put: true }, ...events }),
+        wrap: createSortable('#wrap', { ...events }),
+        scroller: createSortable('#scroller', { ...events }),
+        contained: createSortable('#contained', { containment: true, ...events }),
+        zoneA: createSortable('#zone-a', { group: 'shared', containment: '.zone', ...events }),
+        zoneB: createSortable('#zone-b', { group: 'shared', containment: '.zone', ...events }),
+      };
+      window.lists = lists;
+    </script>
+  </body>
+</html>

@@ -1,6 +1,6 @@
-export { compact } from './core/compact';
-export { diffItems, itemsEqual, layoutsEqual } from './core/diff';
-export { isMovable, isResizable } from './core/flags';
+export { compact } from './drift/core/compact';
+export { diffItems, itemsEqual, layoutsEqual } from './drift/core/diff';
+export { isMovable, isResizable } from './drift/core/flags';
 export {
   clamp,
   collides,
@@ -16,8 +16,8 @@ export {
   toGridPosition,
   toGridSize,
   toPixelRect,
-} from './core/geometry';
-export { cloneLayout, createLayout, parseLayout, sanitizeItem, serializeLayout, validateLayout } from './core/layout';
+} from './drift/core/geometry';
+export { cloneLayout, createLayout, parseLayout, sanitizeItem, serializeLayout, validateLayout } from './drift/core/layout';
 export {
   addItem,
   findFreePosition,
@@ -27,9 +27,9 @@ export {
   resizeItem,
   resizeItemFromLeft,
   updateItem,
-} from './core/operations';
-export type { DriftItemInput } from './core/operations';
-export { applyItems, deriveItems, getBreakpoints, matchBreakpoint, resolveItems } from './core/responsive';
+} from './drift/core/operations';
+export type { DriftItemInput } from './drift/core/operations';
+export { applyItems, deriveItems, getBreakpoints, matchBreakpoint, resolveItems } from './drift/core/responsive';
 export {
   DEFAULT_BREAKPOINTS,
   DEFAULT_COLUMNS,
@@ -37,7 +37,7 @@ export {
   DEFAULT_ROW_HEIGHT,
   LAYOUT_VERSION,
   STACK_THRESHOLD_COLUMNS,
-} from './constants';
+} from './drift/constants';
 export type {
   DriftBreakpoint,
   DriftChanges,
@@ -49,4 +49,4 @@ export type {
   DriftPropValue,
   DriftRect,
   DriftValidationResult,
-} from './types/DriftLayout';
+} from './drift/types/DriftLayout';

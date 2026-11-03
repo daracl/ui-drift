@@ -1,11 +1,11 @@
-import { compact } from '@/core/compact';
+import { compact } from '@/drift/core/compact';
 import { cloneJson, isArray, isFunction, isString } from '@daracl/core/utils';
-import { isMovable, isResizable as isItemResizable } from '@/core/flags';
-import { diffItems, itemsEqual, layoutsEqual } from '@/core/diff';
-import { addItem, moveItem, normalizeItems, removeItem, resizeItem, updateItem } from '@/core/operations';
-import { createMetrics, getRowCount, hasOverlap, normalizeItem, toPixelRect } from '@/core/geometry';
-import { cloneLayout, createLayout, parseLayout, sanitizeItem, serializeLayout } from '@/core/layout';
-import { applyItems, getBreakpoints, matchBreakpoint, resolveItems } from '@/core/responsive';
+import { isMovable, isResizable as isItemResizable } from '@/drift/core/flags';
+import { diffItems, itemsEqual, layoutsEqual } from '@/drift/core/diff';
+import { addItem, moveItem, normalizeItems, removeItem, resizeItem, updateItem } from '@/drift/core/operations';
+import { createMetrics, getRowCount, hasOverlap, normalizeItem, toPixelRect } from '@/drift/core/geometry';
+import { cloneLayout, createLayout, parseLayout, sanitizeItem, serializeLayout } from '@/drift/core/layout';
+import { applyItems, getBreakpoints, matchBreakpoint, resolveItems } from '@/drift/core/responsive';
 import { Emitter } from '@/event/Emitter';
 import {
   DriftApplyOptions,

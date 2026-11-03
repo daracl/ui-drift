@@ -178,7 +178,7 @@ run('외부 소비자 형태의 TypeScript 검사 (Drift 전용 paths 없음, sk
   });
 
   it('검사 자체의 유효성: 배포 선언에 별칭을 되살리면 소비자 검사가 실패한다', () => {
-    const file = path.join(consumer, 'node_modules/@daracl/drift/dist/editor/DriftEditor.d.ts');
+    const file = path.join(consumer, 'node_modules/@daracl/drift/dist/drift/editor/DriftEditor.d.ts');
     const original = fs.readFileSync(file, 'utf8');
     try {
       // 상대 경로로 변환된 import 하나를 원래 별칭으로 되돌린다

@@ -122,7 +122,7 @@ describe('문서(docs/API.md)와 구현의 일치', () => {
   });
 
   it('문서화된 이벤트 이름이 타입 정의에 존재한다', () => {
-    const types = fs.readFileSync(path.join(root, 'src/types/DriftEditor.d.ts'), 'utf8');
+    const types = fs.readFileSync(path.join(root, 'src/drift/types/DriftEditor.d.ts'), 'utf8');
     const events = [
       'layoutChange',
       'add',

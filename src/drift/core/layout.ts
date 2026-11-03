@@ -1,4 +1,4 @@
-import { DEFAULT_COLUMNS, DEFAULT_GAP, DEFAULT_ROW_HEIGHT, LAYOUT_VERSION } from '@/constants';
+import { DEFAULT_COLUMNS, DEFAULT_GAP, DEFAULT_ROW_HEIGHT, LAYOUT_VERSION } from '@/drift/constants';
 import { cloneJson, isArray, isPlainObject, isString } from '@daracl/core/utils';
 import {
   DriftBreakpoint,

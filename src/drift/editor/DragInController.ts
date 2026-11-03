@@ -1,10 +1,10 @@
-import { addItem } from '@/core/operations';
+import { addItem } from '@/drift/core/operations';
 import { cloneJson, isFunction, isString } from '@daracl/core/utils';
-import { normalizeItem, toGridPosition, toPixelRect } from '@/core/geometry';
+import { normalizeItem, toGridPosition, toPixelRect } from '@/drift/core/geometry';
 import { DriftItem } from '@t/DriftLayout';
 import type { DriftDragInDropResult, DriftDragInItem, DriftDragInOptions, DriftDragInSource } from '@t/DriftEditor';
 import type { DriftEditor } from './DriftEditor';
-import type { DriftItemInput } from '@/core/operations';
+import type { DriftItemInput } from '@/drift/core/operations';
 import { CLS } from './classNames';
 import { measureScrollTarget } from './scrollContainer';
 

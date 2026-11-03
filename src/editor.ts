@@ -1,5 +1,5 @@
-export { DriftEditor, createDriftEditor } from './editor/DriftEditor';
-export type { DriftItemPatch } from './editor/DriftEditor';
+export { DriftEditor, createDriftEditor } from './drift/editor/DriftEditor';
+export type { DriftItemPatch } from './drift/editor/DriftEditor';
 export type {
   DriftApplyOptions,
   DriftChangeInfo,
@@ -20,4 +20,4 @@ export type {
   DriftSyncItem,
   DriftSyncOptions,
   DriftSyncResult,
-} from './types/DriftEditor';
+} from './drift/types/DriftEditor';

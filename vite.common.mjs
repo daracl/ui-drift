@@ -19,7 +19,7 @@ export const createCommonConfig = () => ({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),
-      '@t': path.resolve(__dirname, 'src/types'),
+      '@t': path.resolve(__dirname, 'src/drift/types'),
     },
     extensions: ['.js', '.ts'],
   },

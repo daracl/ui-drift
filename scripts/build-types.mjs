@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildFiles, root } from './build-files.mjs';
+import { buildCompat } from './build-compat.mjs';
 
 const require = createRequire(import.meta.url);
 
@@ -22,6 +23,8 @@ export async function buildTypes() {
   // 별칭 대상인 원본 선언이 존재한 뒤에만 tsc-alias를 실행해야 합니다.
   buildFiles('dts');
   await runNode(require.resolve('tsc-alias/dist/bin/index.js'), ['-p', 'tsconfig-build.json']);
+  // src/drift/ 이동 전 경로(dist/core 등)를 쓰던 외부 import 를 위한 호환 선언. check-dts 가 이것도 함께 검사한다.
+  buildCompat();
   await runNode(resolve(root, 'scripts/check-dts.mjs'));
 }
 

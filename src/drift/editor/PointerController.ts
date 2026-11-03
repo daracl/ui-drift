@@ -1,5 +1,5 @@
-import { firstCollision, resolveDragCell, toGridSize, toPixelRect } from '@/core/geometry';
-import { moveItem, resizeItem, resizeItemFromLeft } from '@/core/operations';
+import { firstCollision, resolveDragCell, toGridSize, toPixelRect } from '@/drift/core/geometry';
+import { moveItem, resizeItem, resizeItemFromLeft } from '@/drift/core/operations';
 import type { DriftResizeHandle } from '@t/DriftEditor';
 import { DriftItem, DriftRect } from '@t/DriftLayout';
 import type { DriftEditor } from './DriftEditor';

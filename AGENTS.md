@@ -23,34 +23,38 @@ GridStack 스타일의 Drag & Drop 레이아웃 모듈.
 | 품질 | ESLint 8, Prettier 2 (세미콜론, single quote, printWidth 120, trailing comma all), typedoc |
 | 런타임 | Node 24.20.0 (`.nvmrc`), npm (`package-lock.json`을 커밋하고 `npm ci`로 설치) |
 
-import 별칭: `@/` → `src/`, `@t/` → `src/types/` (tsconfig, jest, vite 모두 동일하게 설정).
+import 별칭: `@/` → `src/`, `@t/` → `src/drift/types/` (Drift 타입 전용. Sortable 타입은 `@/sortable/types`) (tsconfig, jest, vite 모두 동일하게 설정).
 
 ## 3. Project Structure
 
 ```
 ui-drift/
 ├─ src/
-│  ├─ index.ts / core.ts / viewer.ts / editor.ts   공개 entry (index = viewer + editor, viewer 가 core 를 re-export)
+│  ├─ index.ts / core.ts / viewer.ts / editor.ts   Drift 공개 entry (index = viewer + editor, viewer 가 core 를 re-export). 위치를 옮기지 않는다
 │  ├─ index.umd.ts                                  window.Daracl.drift 등록
-│  ├─ constants.ts                                  기본값, TITLE_HEIGHT, 기본 breakpoint
-│  ├─ core/        순수 함수 엔진 (DOM 없음)
-│  │   ├─ geometry.ts     충돌, 정규화, 좌표↔픽셀 변환
-│  │   ├─ compact.ts      세로 중력 압축 / float
-│  │   ├─ operations.ts   add/remove/move/resize/update (불변)
-│  │   ├─ layout.ts       create/parse/serialize/validate/clone
-│  │   └─ responsive.ts   breakpoint 해석, 자동 변환, 편집 반영(applyItems)
-│  ├─ viewer/      정적 HTML+CSS 문자열 생성 (DOM 없음)
-│  │   ├─ renderViewer.ts renderViewer / renderViewerPage
-│  │   └─ escape.ts       escapeHtml, scope 검증, data-* 속성명 변환
-│  ├─ editor/      DOM 편집기
-│  │   ├─ DriftEditor.ts        퍼사드. 모델·렌더·이벤트·히스토리
-│  │   ├─ PointerController.ts  드래그/리사이즈/키보드/클릭
-│  │   ├─ DragInController.ts   외부 요소를 끌어와 추가 (setupDragIn)
-│  │   ├─ GeometryStyle.ts      data-x/y/w/h 위치 CSS 규칙 생성기
-│  │   ├─ History.ts            undo/redo 스택
-│  │   └─ classNames.ts         CSS 클래스 상수 (style/_editor.scss 와 일치)
-│  ├─ event/Emitter.ts
-│  └─ types/*.d.ts   DriftLayout.d.ts, DriftEditor.d.ts
+│  ├─ sortable.ts / sortable.umd.ts                 Sortable 공개 entry (@daracl/drift/sortable, window.Daracl.sortable)
+│  ├─ dom/         공통 DOM 유틸 (autoScroll.ts, flip.ts) — Drift 와 Sortable 이 함께 쓴다
+│  ├─ event/       공통 Emitter.ts
+│  ├─ drift/       Drift 전용 코드 (그리드 레이아웃 에디터/뷰어)
+│  │   ├─ constants.ts           기본값, TITLE_HEIGHT, 기본 breakpoint
+│  │   ├─ types/*.d.ts           DriftLayout.d.ts, DriftEditor.d.ts (@t/ 로 import)
+│  │   ├─ core/        순수 함수 엔진 (DOM 없음)
+│  │   │   ├─ geometry.ts     충돌, 정규화, 좌표↔픽셀 변환
+│  │   │   ├─ compact.ts      세로 중력 압축 / float
+│  │   │   ├─ operations.ts   add/remove/move/resize/update (불변)
+│  │   │   ├─ layout.ts       create/parse/serialize/validate/clone
+│  │   │   └─ responsive.ts   breakpoint 해석, 자동 변환, 편집 반영(applyItems)
+│  │   ├─ viewer/      정적 HTML+CSS 문자열 생성 (DOM 없음)
+│  │   │   ├─ renderViewer.ts renderViewer / renderViewerPage
+│  │   │   └─ escape.ts       escapeHtml, scope 검증, data-* 속성명 변환
+│  │   └─ editor/      DOM 편집기
+│  │       ├─ DriftEditor.ts        퍼사드. 모델·렌더·이벤트·히스토리
+│  │       ├─ PointerController.ts  드래그/리사이즈/키보드/클릭
+│  │       ├─ DragInController.ts   외부 요소를 끌어와 추가 (setupDragIn)
+│  │       ├─ GeometryStyle.ts      data-x/y/w/h 위치 CSS 규칙 생성기
+│  │       ├─ History.ts            undo/redo 스택
+│  │       └─ classNames.ts         CSS 클래스 상수 (style/_editor.scss 와 일치)
+│  └─ sortable/    Sortable 본체 (Drift 를 import 하지 않는다). types.d.ts 는 @/sortable/types
 ├─ style/   daracl.drift.scss(Editor), daracl.drift.viewer.scss(선택), _editor.scss, _variables.scss
 ├─ test/    core, viewer, editor(jsdom), build(dist 산출물 검사)
 ├─ e2e/     Playwright 스펙 + helpers.ts
@@ -75,7 +79,7 @@ types → core → viewer
 
 ### 데이터 모델
 
-`DriftLayout { version:1, columns, rowHeight, gap, float?, breakpoints?, items[] }`, `DriftItem { id, x, y, w, h, title?, minW/minH/maxW/maxH?, locked?, resizable?, content?, props?, responsive? }` (`src/types/DriftLayout.d.ts`).
+`DriftLayout { version:1, columns, rowHeight, gap, float?, breakpoints?, items[] }`, `DriftItem { id, x, y, w, h, title?, minW/minH/maxW/maxH?, locked?, resizable?, content?, props?, responsive? }` (`src/drift/types/DriftLayout.d.ts`).
 
 - 좌표는 0 기반 정수 셀 단위. 모든 core 연산은 **불변**이며 새 배열을 반환한다. 같은 입력은 같은 결과(정렬은 `compareYX` 가 id 로 동률을 깬다).
 - 잠금: `locked`(위치 고정 = 이동 금지 + 고정 장애물)와 `resizable`(크기 조절)은 **독립**이다. 판정은 반드시 `core/flags.ts` 의 `isMovable`/`isResizable(item, lockedResizable)` 를 쓴다(`resizable` 명시값 → 없으면 locked 이면 `lockedResizable`(기본 false), 아니면 true). `locked` 를 직접 보고 크기 조절을 막지 않는다. 위치만 고정된 항목은 `se` 핸들/`resizeItem`/Shift+방향키로 (x, y) 유지한 채 크기만 바뀌고, `sw` 핸들/`resizeItemFromLeft` 는 locked 에 쓸 수 없다. 포인터 미리보기·무효 placeholder 판정에서 크기를 조절하는 자기 자신(locked)은 장애물에서 제외한다.
@@ -118,9 +122,9 @@ types → core → viewer
 
 - Prettier/ESLint 설정을 따른다(`npx prettier --write`). `no-console: warn`, 문자열은 single quote, 세미콜론 필수.
 - 코드 주석은 한국어. 주석은 "왜"를 설명한다.
-- 타입은 `src/types/*.d.ts` 에 두고 `@t/` 로 import 한다(`.d.ts` 안에는 값/enum 을 두지 않는다).
+- Drift 타입은 `src/drift/types/*.d.ts` 에 두고 `@t/` 로 import 한다(`.d.ts` 안에는 값/enum 을 두지 않는다).
 - 새 core 연산은 순수 함수·불변으로 만들고 `src/core.ts` 에서 export 한다. float 같은 정책 인자는 마지막 선택 인자로 전달한다.
-- 클래스명은 `src/editor/classNames.ts` 와 `style/_editor.scss` 가 항상 같아야 한다.
+- 클래스명은 `src/drift/editor/classNames.ts` 와 `style/_editor.scss` 가 항상 같아야 한다.
 
 ## 6. Naming Conventions
 
@@ -137,8 +141,8 @@ types → core → viewer
 ## 7. Development Guidelines
 
 - 변경 전에 해당 모듈의 테스트를 먼저 읽고, 변경과 함께 테스트를 추가한다. 새 기능에는 단위 테스트와 `uitest/*.html` 하네스 또는 Playwright 테스트를 같이 둔다.
-- 공개 옵션/API 를 바꾸면 `src/types/DriftEditor.d.ts`, `docs/API.md`, `README.md`, 필요 시 `docs/DESIGN.md` 를 같이 갱신한다. `test/build/distConsumer.test.ts` 가 `docs/API.md` 의 표(Editor 메서드, Core/Viewer 함수, 이벤트 이름)와 실제 구현의 일치를 검사하므로 표의 첫 칸 형식(`` `name(` ``)을 유지한다.
-- 타이틀 영역 높이는 `$drift-title-height`(SCSS)와 `TITLE_HEIGHT`(`src/constants.ts`)가 같아야 한다.
+- 공개 옵션/API 를 바꾸면 `src/drift/types/DriftEditor.d.ts`, `docs/API.md`, `README.md`, 필요 시 `docs/DESIGN.md` 를 같이 갱신한다. `test/build/distConsumer.test.ts` 가 `docs/API.md` 의 표(Editor 메서드, Core/Viewer 함수, 이벤트 이름)와 실제 구현의 일치를 검사하므로 표의 첫 칸 형식(`` `name(` ``)을 유지한다.
+- 타이틀 영역 높이는 `$drift-title-height`(SCSS)와 `TITLE_HEIGHT`(`src/drift/constants.ts`)가 같아야 한다.
 - 스타일시트 생성 로직(`GeometryStyle`)에 `data-*` 값을 CSS 에 넣을 때는 숫자만 쓴다. 사용자 문자열을 CSS/SVG 에 직접 넣지 않는다.
 - `docs/DESIGN.md §9` 의 알려진 제약(세로 방향만, nested grid 없음, 고정 행 높이, Viewer `@media` 는 뷰포트 기준)을 바꾸는 작업이면 문서를 함께 고친다.
 
@@ -164,7 +168,7 @@ types → core → viewer
 
 ### 배포 타입 선언(d.ts) 규칙
 
-`build:tsc` 의 순서는 **`tsc` → 원본 `src/**/*.d.ts` 복사(Node fs) → `tsc-alias` → `check-dts`** 이다. `tsc-alias` 는 별칭이 가리키는 파일이 실제로 있을 때만 상대 경로로 바꾸는데, `src/types/*.d.ts` 는 `tsc` 가 출력하지 않고 복사 단계에서 `dist` 에 들어가므로, 복사 전에 `tsc-alias` 를 실행하면 `@t/*` 가 그대로 남아 외부 프로젝트가 타입을 해석하지 못한다. 순서를 바꾸지 않는다. 회귀 검사: `scripts/check-dts.mjs`, `test/build/dtsConsumer.test.ts`(npm pack 으로 설치한 소비자, `skipLibCheck:false`, Drift 전용 `paths` 없음).
+`build:tsc` 의 순서는 **`tsc` → 원본 `src/**/*.d.ts` 복사(Node fs) → `tsc-alias` → `check-dts`** 이다. `tsc-alias` 는 별칭이 가리키는 파일이 실제로 있을 때만 상대 경로로 바꾸는데, `src/drift/types/*.d.ts` 는 `tsc` 가 출력하지 않고 복사 단계에서 `dist` 에 들어가므로, 복사 전에 `tsc-alias` 를 실행하면 `@t/*` 가 그대로 남아 외부 프로젝트가 타입을 해석하지 못한다. 순서를 바꾸지 않는다. 회귀 검사: `scripts/check-dts.mjs`, `test/build/dtsConsumer.test.ts`(npm pack 으로 설치한 소비자, `skipLibCheck:false`, Drift 전용 `paths` 없음).
 
 ## 9. Error Handling & Logging
 
