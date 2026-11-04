@@ -61,6 +61,8 @@ interface ScrollLink {
   el: Element;
   y: boolean;
   x: boolean;
+  /** 체인을 조사할 때 읽은 화면 영역. 프레임마다 레이아웃을 읽지 않도록 캐시하고, 스크롤했을 때 무효화한다 */
+  rect: DOMRect | null;
 }
 
 export class AutoScroller {
@@ -89,7 +91,7 @@ export class AutoScroller {
     for (let el = start; el && !isPageRoot(el); el = el.parentElement) {
       const y = canScroll(el, 'y');
       const x = canScroll(el, 'x');
-      if (y || x) this.chain.push({ el, y, x });
+      if (y || x) this.chain.push({ el, y, x, rect: null });
     }
   }
 
@@ -114,9 +116,10 @@ export class AutoScroller {
     };
 
     this.refreshChain(start, now);
-    for (const { el, x: scrollX, y: scrollY } of this.chain) {
+    for (const link of this.chain) {
+      const { el, x: scrollX, y: scrollY } = link;
       if (moved.x && moved.y) break;
-      const rect = el.getBoundingClientRect();
+      const rect = (link.rect ??= el.getBoundingClientRect());
       if (!moved.y && scrollY) {
         const v = edgeVelocity(y, Math.max(rect.top, 0), Math.min(rect.bottom, window.innerHeight), this.options);
         tryScroll(el, 'y', v, (px) => ((el as Element).scrollTop += px));
@@ -133,6 +136,9 @@ export class AutoScroller {
       tryScroll(root, 'y', edgeVelocity(y, 0, window.innerHeight, this.options), (px) => window.scrollBy(0, px));
     if (!moved.x)
       tryScroll(root, 'x', edgeVelocity(x, 0, window.innerWidth, this.options), (px) => window.scrollBy(px, 0));
+
+    // 스크롤하면 안쪽 요소들의 화면 위치가 달라지므로 캐시한 영역을 버린다
+    if (moved.x || moved.y) this.chain.forEach((link) => (link.rect = null));
 
     // 가장자리를 벗어나 더 이상 스크롤할 필요가 없으면 누적하던 소수 이동량을 버린다
     if (!wanted.x) this.remainder.x = 0;

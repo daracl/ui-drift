@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ui-drift viewer fitHeight</title>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+        box-sizing: border-box;
+        padding: 12px;
+        font-family: system-ui, sans-serif;
+        background: #f3f4f6;
+      }
+      #bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+        margin-bottom: 8px;
+        font-size: 13px;
+      }
+      #bar input[type='number'] {
+        width: 70px;
+      }
+      #info {
+        margin-bottom: 8px;
+        font-size: 12px;
+        color: #475569;
+      }
+      /* 뷰어의 부모: 정해진 높이가 있어야 height:100% 가 동작한다. 남은 화면 높이를 채운다 */
+      #host {
+        flex: 1;
+        min-height: 0;
+        background: #fff;
+        border: 1px dashed #cbd5e1;
+        overflow: auto;
+        resize: vertical; /* 오른쪽 아래 모서리를 끌어 높이를 바꿔 본다 */
+      }
+      #host.fixed {
+        flex: none;
+        height: 420px;
+      }
+      .ddr-item {
+        background: #eef2ff;
+      }
+      .ddr-title {
+        padding: 0 8px;
+        background: #c7d2fe;
+      }
+    </style>
+  </head>
+  <body>
+    <h3 style="margin: 0 0 8px">Viewer fitHeight (높이 100%)</h3>
+    <div id="bar">
+      <label>
+        레이아웃
+        <select id="sample">
+          <option value="one">1행 → 100%</option>
+          <option value="two" selected>2행 → 50% / 50%</option>
+          <option value="mixed">혼합 (1/3, 2/3)</option>
+          <option value="many">12행 (minRowHeight 확인)</option>
+        </select>
+      </label>
+      <label><input type="checkbox" id="fit" checked /> fitHeight</label>
+      <label>mobileMaxWidth <input type="number" id="mobile" value="767" min="0" step="10" /></label>
+      <label>minRowHeight <input type="number" id="minRow" value="0" min="0" step="10" /></label>
+      <label><input type="checkbox" id="fixed" /> 부모 높이 420px 고정</label>
+    </div>
+    <div id="info"></div>
+    <div id="host"></div>
+    <style id="viewerCss"></style>
+
+    <script type="module">
+      import { renderViewer } from '/src/viewer.ts';
+
+      const box = (id, x, y, w, h, title) => ({ id, x, y, w, h, title, content: `${id} (${w}×${h})` });
+      const SAMPLES = {
+        one: [box('a', 0, 0, 12, 1, 'Only')],
+        two: [box('a', 0, 0, 12, 1, 'Top'), box('b', 0, 1, 12, 1, 'Bottom')],
+        mixed: [
+          box('header', 0, 0, 12, 1, 'Header'),
+          box('side', 0, 1, 3, 2, 'Sidebar'),
+          box('main', 3, 1, 9, 1, 'Main'),
+          box('footer', 3, 2, 9, 1, 'Footer'),
+        ],
+        many: Array.from({ length: 12 }, (_, i) => box(`r${i + 1}`, 0, i, 12, 1, `Row ${i + 1}`)),
+      };
+
+      const $ = (id) => document.getElementById(id);
+
+      function render() {
+        const layout = {
+          version: 1,
+          columns: 12,
+          rowHeight: 60,
+          gap: 8,
+          // fitHeight 에서는 breakpoint 를 쓰지 않으므로 태블릿 폭도 데스크톱 배치로 움직인다
+          breakpoints: [],
+          items: SAMPLES[$('sample').value],
+        };
+        const fitHeight = $('fit').checked
+          ? { minRowHeight: Number($('minRow').value) }
+          : false;
+        const { html, css } = renderViewer(layout, { fitHeight, mobileMaxWidth: Number($('mobile').value) });
+        $('viewerCss').textContent = css;
+        $('host').innerHTML = html;
+        $('host').classList.toggle('fixed', $('fixed').checked);
+        updateInfo();
+      }
+
+      function updateInfo() {
+        const viewer = document.querySelector('.ddr-viewer');
+        if (!viewer) return;
+        const rows = getComputedStyle(viewer).gridTemplateRows;
+        $('info').textContent = `창 폭 ${innerWidth}px · 부모 높이 ${$('host').clientHeight}px · 뷰어 높이 ${Math.round(
+          viewer.getBoundingClientRect().height,
+        )}px · grid-template-rows: ${rows}`;
+      }
+
+      ['sample', 'fit', 'mobile', 'minRow', 'fixed'].forEach((id) => $(id).addEventListener('input', render));
+      new ResizeObserver(updateInfo).observe($('host'));
+      addEventListener('resize', updateInfo);
+      render();
+    </script>
+  </body>
+</html>

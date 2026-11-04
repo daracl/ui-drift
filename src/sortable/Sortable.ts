@@ -576,11 +576,7 @@ export class Sortable {
     // 여러 줄 배치에서 같은 줄 이웃을 지나지 않았는데 맨 앞/맨 뒤로 튀는 일이 없다.
     const anchor =
       target ??
-      this.nearestItem(
-        this.items().filter((i) => i !== dragged),
-        x,
-        y,
-      );
+      this.nearestItem(dragged, x, y);
 
     if (!this.options.sort || !anchor) {
       // 정렬 없이 들어오는 목록이거나 비어 있는 목록: 맨 뒤에 넣는다
@@ -645,11 +641,14 @@ export class Sortable {
    * 이동한다. 그래서 먼저 세로 거리가 가장 가까운 줄을 고르고(세로 목록에서는 항목마다 달라 그대로 가장 가까운 항목),
    * 같은 줄 안에서 가로 거리가 가장 가까운 항목을 고른다.
    */
-  private nearestItem(items: HTMLElement[], x: number, y: number): HTMLElement | null {
+  private nearestItem(excluded: HTMLElement, x: number, y: number): HTMLElement | null {
+    const { draggable } = this.options;
     let best: HTMLElement | null = null;
     let bestDy = Infinity;
     let bestDx = Infinity;
-    for (const el of items) {
+    // 항목 배열을 따로 만들지 않고 자식을 직접 순회한다 (측정은 항목마다 한 번)
+    for (let el = this.el.firstElementChild; el; el = el.nextElementSibling) {
+      if (el === excluded || !(el instanceof HTMLElement) || (draggable && !el.matches(draggable))) continue;
       const r = el.getBoundingClientRect();
       const dx = Math.max(r.left - x, 0, x - r.right);
       const dy = Math.max(r.top - y, 0, y - r.bottom);
@@ -689,18 +688,30 @@ export class Sortable {
    */
   private movingElements(item: HTMLElement, fromEl: HTMLElement | null, ref: Node | null): HTMLElement[] {
     const result: HTMLElement[] = [];
-    const push = (nodes: Element[]): void => nodes.forEach((n) => n instanceof HTMLElement && result.push(n));
-    const fromKids = fromEl ? Array.from(fromEl.children) : [];
-    const from = fromKids.indexOf(item);
+    // 목록 전체를 배열로 만들지 않고 형제 포인터만 따라가므로 비용이 이동 구간의 크기에만 비례한다
+    const collect = (start: Element | null, stop: Element | null, includeStop: boolean): void => {
+      for (let el = start; el; el = el.nextElementSibling) {
+        if (el === stop && !includeStop) return;
+        if (el instanceof HTMLElement) result.push(el);
+        if (el === stop) return;
+      }
+    };
+    // ref 가 텍스트/주석 노드일 수 있으므로 그 뒤의 첫 요소를 기준으로 삼는다
+    let refEl: Node | null = ref;
+    while (refEl && refEl.nodeType !== 1) refEl = refEl.nextSibling;
+    const refElement = refEl as Element | null;
+
     if (fromEl === this.el) {
-      const to = ref ? fromKids.indexOf(ref as Element) : fromKids.length;
       // item 은 ref '앞'에 들어가므로 ref 자신은 움직이지 않는다.
       // 뒤로 가면 item 과 그 뒤 ~ ref 직전까지, 앞으로 가면 ref 부터 item 까지가 자리가 바뀐다
-      push(to > from ? fromKids.slice(from, to) : fromKids.slice(to, from + 1));
+      if (!refElement || item.compareDocumentPosition(refElement) & Node.DOCUMENT_POSITION_FOLLOWING) {
+        collect(item, refElement, false);
+      } else {
+        collect(refElement, item, true);
+      }
     } else {
-      if (from >= 0) push(fromKids.slice(from));
-      const toKids = Array.from(this.el.children);
-      push(toKids.slice(ref ? Math.max(toKids.indexOf(ref as Element), 0) : toKids.length));
+      if (fromEl) collect(item, null, true);
+      collect(refElement, null, true);
     }
     return result;
   }

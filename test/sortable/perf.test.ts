@@ -66,6 +66,20 @@ describe('Sortable 성능 최적화', () => {
     pointer(document, 'pointerup', 310, 2 * ITEM_H + 5);
   });
 
+  it('항목 사이에 텍스트 노드가 있어도 움직이는 구간만 측정한다', () => {
+    const list = makeList(['a', 'b', 'c', 'd', 'e', 'f'], 'l');
+    Array.from(list.children).forEach((c) => c.after(document.createTextNode('\n')));
+    const measured = trackMeasured(Array.from(list.children));
+    make(list, { animation: 150 });
+    pointer(list.children[1], 'pointerdown', 10, ITEM_H + 10);
+    pointer(document, 'pointermove', 15, ITEM_H + 15);
+    measured.clear();
+    pointer(document, 'pointermove', 10, 2 * ITEM_H + 30); // b 가 c 뒤로
+    expect(ids(list)).toEqual(['a', 'c', 'b', 'd', 'e', 'f']);
+    ['a', 'd', 'e', 'f'].forEach((id) => expect(measured.has(id)).toBe(false));
+    pointer(document, 'pointerup', 10, 2 * ITEM_H + 30);
+  });
+
   it('mirror: box 이면 복제본에 내용이 없다', () => {
     const list = makeList(['a', 'b'], 'l');
     list.children[0].innerHTML = '<span>무거운 내용</span><iframe></iframe>';

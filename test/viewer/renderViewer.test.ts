@@ -144,3 +144,105 @@ describe('보안', () => {
     expect(r.html).toContain('<b>a</b>');
   });
 });
+
+describe('fitHeight', () => {
+  const single = createLayout({ columns: 12, rowHeight: 48, gap: 10, items: [{ id: 'a', x: 0, y: 0, w: 12, h: 1 }] });
+  const two = createLayout({
+    columns: 12,
+    breakpoints: [],
+    items: [
+      { id: 'a', x: 0, y: 0, w: 12, h: 1 },
+      { id: 'b', x: 0, y: 1, w: 12, h: 1 },
+    ],
+  });
+
+  it('옵션이 없으면 기존 출력과 같다', () => {
+    const css = renderViewer(layout).css;
+    expect(css).not.toContain('grid-template-rows');
+    expect(css).not.toContain('height:100%');
+    expect(renderViewer(layout, { fitHeight: false }).css).toBe(css);
+  });
+
+  it('행 수만큼 fr 행을 만든다 (1행 → 1fr, 2행 → 같은 몫 둘)', () => {
+    expect(renderViewer(single, { fitHeight: true }).css).toContain(
+      '.ddr-viewer{height:100%;grid-template-rows:repeat(1,minmax(0px,1fr))}',
+    );
+    expect(renderViewer(two, { fitHeight: true }).css).toContain('grid-template-rows:repeat(2,minmax(0px,1fr))');
+  });
+
+  it('rowHeight 는 그대로 남겨 맞춤을 끈 폭에서 쓰인다', () => {
+    expect(renderViewer(single, { fitHeight: true }).css).toContain('grid-auto-rows:48px');
+  });
+
+  it('기본은 767px 이하에서 맞춤을 끄고 1열로 위에서 아래로 쌓으며, 마지막 규칙이다', () => {
+    const css = renderViewer(single, { fitHeight: true }).css;
+    const off =
+      '@media (max-width:767px){.ddr-viewer{height:auto;grid-template-rows:none;grid-template-columns:minmax(0,1fr);grid-auto-rows:auto}.ddr-viewer>.ddr-item{grid-column:1/-1;grid-row:auto}.ddr-viewer>[data-h="1"]{height:48px}}';
+    expect(css).toContain(off);
+    expect(css.lastIndexOf('@media')).toBe(css.indexOf(off));
+  });
+
+  it('mobileMaxWidth / minRowHeight 를 지정할 수 있다', () => {
+    const css = renderViewer(two, { fitHeight: { minRowHeight: 40 }, mobileMaxWidth: 500 }).css;
+    expect(css).toContain('grid-template-rows:repeat(2,minmax(40px,1fr))');
+    expect(css).toContain(
+      '@media (max-width:500px){.ddr-viewer{height:auto;grid-template-rows:none;grid-template-columns:minmax(0,1fr);grid-auto-rows:auto}.ddr-viewer>.ddr-item{grid-column:1/-1;grid-row:auto}',
+    );
+  });
+
+  it('잘못된 값은 기본값으로 대체한다', () => {
+    const css = renderViewer(two, { fitHeight: { minRowHeight: NaN }, mobileMaxWidth: -1 }).css;
+    expect(css).toContain('@media (max-width:767px)');
+    expect(css).toContain('minmax(0px,1fr)');
+  });
+
+  it('태블릿 등 breakpoint 는 쓰지 않고 데스크톱 배치를 그대로 쓴다', () => {
+    const custom = createLayout({
+      columns: 12,
+      breakpoints: [{ name: 'tablet', maxWidth: 1024, columns: 4 }],
+      items: [
+        { id: 'a', x: 0, y: 0, w: 6, h: 1 },
+        { id: 'b', x: 6, y: 0, w: 6, h: 1 },
+      ],
+    });
+    const r = renderViewer(custom, { fitHeight: true });
+    expect(r.css).not.toContain('max-width:1024px');
+    expect(r.css).not.toContain('data-bp');
+    expect(r.html).not.toContain('data-bp');
+    expect(r.css).toContain('grid-template-rows:repeat(1,minmax(0px,1fr))'); // 데스크톱: 한 줄
+    expect(renderViewer(custom).css).toContain('max-width:1024px'); // 옵션이 없으면 기존대로
+  });
+
+  it('미디어 쿼리는 모바일 한 개뿐이다', () => {
+    const css = renderViewer(layout, { fitHeight: true }).css;
+    expect(css.match(/@media/g)).toHaveLength(1);
+    expect(css).toContain('@media (max-width:767px)');
+  });
+});
+
+describe('mobileMaxWidth (fitHeight 없이)', () => {
+  it('모바일 높이는 span 이 아니라 h × rowHeight 이다 (gap 이 더해지지 않는다)', () => {
+    const css = renderViewer(layout, { mobileMaxWidth: 767 }).css; // rowHeight 48, h 는 2 와 3
+    const mobile = css.slice(css.indexOf('@media (max-width:767px)'));
+    expect(mobile).toContain('.ddr-viewer>[data-h="2"]{height:96px}');
+    expect(mobile).toContain('.ddr-viewer>[data-h="3"]{height:144px}');
+    expect(mobile).toContain('grid-auto-rows:auto');
+    expect(mobile).toContain('grid-row:auto'); // 데스크톱의 grid-row-end:span h 를 지운다
+  });
+
+  it('breakpoint 를 쓰지 않고, 이 폭 이하에서만 한 줄로 쌓는다 (태블릿은 데스크톱 배치)', () => {
+    const r = renderViewer(layout, { mobileMaxWidth: 767 });
+    expect(r.css).not.toContain('max-width:1024px');
+    expect(r.css).not.toContain('data-bp');
+    expect(r.html).not.toContain('data-bp');
+    expect(r.css).not.toContain('grid-template-rows');
+    expect(r.css.match(/@media/g)).toHaveLength(1);
+    expect(r.css).toContain(
+      '@media (max-width:767px){.ddr-viewer{grid-template-columns:minmax(0,1fr);grid-auto-rows:auto}.ddr-viewer>.ddr-item{grid-column:1/-1;grid-row:auto}.ddr-viewer>[data-h="2"]{height:96px}.ddr-viewer>[data-h="3"]{height:144px}}',
+    );
+  });
+
+  it('지정하지 않으면 breakpoints 로 반응한다', () => {
+    expect(renderViewer(layout).css).toContain('max-width:1024px');
+  });
+});

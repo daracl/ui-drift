@@ -17,6 +17,8 @@
         color: #475569;
       }
       #viewer {
+        /* ?fit=1 : 높이를 행 수로 나눠 채운다 (부모에 정해진 높이가 필요하다) */
+        height: calc(100vh - 90px);
         background: #fff;
         border: 1px dashed #cbd5e1;
       }
@@ -48,7 +50,10 @@
           return;
         }
         try {
-          const { html, css } = renderViewer(raw);
+          // 767px(?mobile=600 으로 변경) 이하는 한 줄로 쌓고 태블릿은 데스크톱 배치. ?fit=1 → 높이 100% 맞춤
+          const params = new URLSearchParams(location.search);
+          const mobileMaxWidth = Number(params.get('mobile')) || 767;
+          const { html, css } = renderViewer(raw, { fitHeight: params.has('fit'), mobileMaxWidth });
           document.getElementById('viewerCss').textContent = css;
           document.getElementById('viewer').innerHTML = html;
           status.textContent = `localStorage('${STORAGE_KEY}') 에서 불러옴`;

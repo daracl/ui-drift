@@ -13,7 +13,27 @@ export interface ViewerOptions {
    * 지정하지 않으면 item.content(없으면 빈 문자열)가 텍스트로 출력된다.
    */
   renderContent?: (item: DriftItem) => string;
+  /**
+   * 컨테이너 높이(height:100%)를 행 수로 나눠 채운다. 항목이 1행뿐이면 100%, 2행이면 각 50% 가 된다.
+   * 부모에 정해진 높이가 있어야 한다. true 이면 기본값을 쓴다. mobileMaxWidth 이하에서는 맞춤을 끄고 rowHeight 로 쌓는다.
+   * 이 옵션을 쓰면 mobileMaxWidth 를 지정하지 않아도 기본값(767)으로 모바일 처리가 켜진다.
+   */
+  fitHeight?: boolean | ViewerFitHeightOptions;
+  /**
+   * 이 폭(px) 이하를 '모바일'로 보고 모든 항목을 한 줄(1열)로 위에서 아래로 쌓는다. 이보다 넓으면(태블릿 포함)
+   * layout.breakpoints 를 쓰지 않고 데스크톱 배치 그대로 움직인다. 지정하지 않으면 layout.breakpoints 로 반응한다
+   * (fitHeight 를 쓰면 767).
+   */
+  mobileMaxWidth?: number;
 }
+
+export interface ViewerFitHeightOptions {
+  /** 행의 최소 높이(px). 행이 많아 이보다 작아지면 최소 높이를 지키고 뷰어가 스크롤된다. 기본 0 */
+  minRowHeight?: number;
+}
+
+/** fitHeight 에서 모바일로 보는 기본 폭(px) */
+export const DEFAULT_MOBILE_MAX_WIDTH = 767;
 
 export interface ViewerPageOptions extends ViewerOptions {
   title?: string;
@@ -38,7 +58,12 @@ const fmt = (n: number): string => String(Number.isFinite(n) ? n : 0);
  * 입력은 parseLayout 으로 검증/보정된다.
  */
 export function renderViewer(input: DriftLayout | string | unknown, options: ViewerOptions = {}): ViewerResult {
-  const layout = parseLayout(input);
+  const fit = resolveFit(options.fitHeight);
+  const mobile = resolveMobile(options.mobileMaxWidth, fit);
+  const parsed = parseLayout(input);
+  // 모바일 처리를 켜면 태블릿 등 breakpoint 는 쓰지 않는다: 넓으면 모두 데스크톱 배치로 움직이고,
+  // 그 이하는 한 줄 적층이 모든 breakpoint 를 덮어쓰기 때문이다
+  const layout = mobile === undefined ? parsed : { ...parsed, breakpoints: [] };
   const scope = assertScope(options.scope || 'ddr');
   const sorted = layout.items.slice().sort(compareYX);
 
@@ -47,8 +72,24 @@ export function renderViewer(input: DriftLayout | string | unknown, options: Vie
   return {
     scope,
     html: buildHtml(sorted, levels, scope, options),
-    css: buildCss(layout, sorted, levels, scope),
+    css: buildCss(layout, sorted, levels, scope, fit, mobile),
   };
+}
+
+interface Fit {
+  minRowHeight: number;
+}
+
+/** 모바일 폭(px). 지정하지 않았고 fitHeight 도 아니면 undefined (breakpoints 사용) */
+function resolveMobile(input: number | undefined, fit?: Fit): number | undefined {
+  if (typeof input === 'number' && Number.isFinite(input) && input >= 0) return input;
+  return fit ? DEFAULT_MOBILE_MAX_WIDTH : undefined;
+}
+
+function resolveFit(input: ViewerOptions['fitHeight']): Fit | undefined {
+  if (!input) return undefined;
+  const min = input === true ? undefined : input.minRowHeight;
+  return { minRowHeight: typeof min === 'number' && Number.isFinite(min) && min >= 0 ? min : 0 };
 }
 
 type Axis = 'x' | 'y' | 'w' | 'h';
@@ -114,7 +155,14 @@ function buildHtml(sorted: DriftItem[], levels: Levels, scope: string, options: 
   return `<div class="${scope}-viewer">${items.join('')}</div>`;
 }
 
-function buildCss(layout: DriftLayout, sorted: DriftItem[], levels: Levels, scope: string): string {
+function buildCss(
+  layout: DriftLayout,
+  sorted: DriftItem[],
+  levels: Levels,
+  scope: string,
+  fit?: Fit,
+  mobile?: number,
+): string {
   const root = `.${scope}-viewer`;
   const cols = (n: number) => `grid-template-columns:repeat(${fmt(n)},minmax(0,1fr))`;
 
@@ -144,11 +192,34 @@ function buildCss(layout: DriftLayout, sorted: DriftItem[], levels: Levels, scop
 
   // 기본(desktop) 배치
   rules.push(...valueRules(0));
+  if (fit) {
+    // 총 행 수만큼 fr 행을 만들어 컨테이너 높이를 나눈다 (gap 은 grid 가 알아서 뺀다)
+    const rows = Math.max(
+      sorted.reduce((max, item) => Math.max(max, item.y + item.h), 0),
+      1,
+    );
+    rules.push(`${root}{height:100%;grid-template-rows:repeat(${rows},minmax(${fmt(fit.minRowHeight)}px,1fr))}`);
+  }
 
   // 큰 breakpoint 부터 max-width 미디어 쿼리로 덮어쓴다. 이전 단계와 달라진 값만 출력
   for (let level = 1; level < levels.geometry.length; level++) {
     const body = [`${root}{${cols(levels.columns[level])}}`, ...valueRules(level)];
     rules.push(`@media (max-width:${fmt(levels.maxWidths[level - 1])}px){${body.join('')}}`);
+  }
+
+  // 모바일 폭: (맞춤을 끄고) 한 줄(1열)로 위에서 아래로 쌓는다. 항목은 읽기 순서((y, x) 정렬된 DOM 순서)대로 전폭을 차지한다.
+  // 높이는 span 으로 정하지 않고 h × rowHeight 로 직접 준다 (span 하면 사이 gap 이 더해져 더 커진다). 항목 사이 간격만 gap 이다.
+  // 반드시 마지막에 둔다.
+  if (mobile !== undefined) {
+    const heights = Array.from(new Set(sorted.map((item) => item.h))).sort((p, q) => p - q);
+    const stack = [
+      `${root}{${
+        fit ? 'height:auto;grid-template-rows:none;' : ''
+      }grid-template-columns:minmax(0,1fr);grid-auto-rows:auto}`,
+      `${root}>.${scope}-item{grid-column:1/-1;grid-row:auto}`,
+      ...heights.map((h) => `${root}>[data-h="${fmt(h)}"]{height:${fmt(h * layout.rowHeight)}px}`),
+    ];
+    rules.push(`@media (max-width:${fmt(mobile)}px){${stack.join('')}}`);
   }
 
   return rules.join('\n');

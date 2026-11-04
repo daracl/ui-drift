@@ -4,49 +4,10 @@
   "rowHeight": 30,
   "gap": 8,
   "items": [
-    {
-      "id": "a",
-      "x": 0,
-      "y": 0,
-      "w": 4,
-      "h": 3,
-      "title": "test1",
-      "content": "Chart A"
-    },
-    {
-      "id": "b",
-      "x": 11,
-      "y": 0,
-      "w": 4,
-      "h": 3,
-      "content": "Chart B"
-    },
-    {
-      "id": "c",
-      "x": 11,
-      "y": 6,
-      "w": 4,
-      "h": 3,
-      "content": "Map"
-    },
-    {
-      "id": "d",
-      "x": 0,
-      "y": 3,
-      "w": 8,
-      "h": 3,
-      "content": "Table",
-      "props": {
-        "kind": "table"
-      }
-    },
-    {
-      "id": "e",
-      "x": 8,
-      "y": 3,
-      "w": 4,
-      "h": 3,
-      "content": "Notes"
-    }
+    { "id": "a", "x": 0, "y": 0, "w": 4, "h": 2, "title": "test1", "content": "Chart A" },
+    { "id": "b", "x": 11, "y": 0, "w": 4, "h": 5, "content": "Chart B" },
+    { "id": "c", "x": 11, "y": 7, "w": 4, "h": 3, "content": "Map" },
+    { "id": "d", "x": 0, "y": 2, "w": 8, "h": 4, "content": "Table", "props": { "kind": "table" } },
+    { "id": "e", "x": 8, "y": 5, "w": 4, "h": 2, "content": "Notes" }
   ]
 }
