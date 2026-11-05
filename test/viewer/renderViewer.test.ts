@@ -165,7 +165,7 @@ describe('fitHeight', () => {
 
   it('행 수만큼 fr 행을 만든다 (1행 → 1fr, 2행 → 같은 몫 둘)', () => {
     expect(renderViewer(single, { fitHeight: true }).css).toContain(
-      '.ddr-viewer{height:100%;grid-template-rows:repeat(1,minmax(0px,1fr))}',
+      '.ddr-viewer{height:100%;min-height:200px;grid-template-rows:repeat(1,minmax(0px,1fr))}',
     );
     expect(renderViewer(two, { fitHeight: true }).css).toContain('grid-template-rows:repeat(2,minmax(0px,1fr))');
   });
@@ -177,7 +177,7 @@ describe('fitHeight', () => {
   it('기본은 767px 이하에서 맞춤을 끄고 1열로 위에서 아래로 쌓으며, 마지막 규칙이다', () => {
     const css = renderViewer(single, { fitHeight: true }).css;
     const off =
-      '@media (max-width:767px){.ddr-viewer{height:auto;grid-template-rows:none;grid-template-columns:minmax(0,1fr);grid-auto-rows:auto}.ddr-viewer>.ddr-item{grid-column:1/-1;grid-row:auto}.ddr-viewer>[data-h="1"]{height:48px}}';
+      '@media (max-width:767px){.ddr-viewer{height:auto;min-height:0;grid-template-rows:none;grid-template-columns:minmax(0,1fr);grid-auto-rows:auto}.ddr-viewer>.ddr-item{grid-column:1/-1;grid-row:auto}.ddr-viewer>[data-h="1"]{height:48px}}';
     expect(css).toContain(off);
     expect(css.lastIndexOf('@media')).toBe(css.indexOf(off));
   });
@@ -186,7 +186,17 @@ describe('fitHeight', () => {
     const css = renderViewer(two, { fitHeight: { minRowHeight: 40 }, mobileMaxWidth: 500 }).css;
     expect(css).toContain('grid-template-rows:repeat(2,minmax(40px,1fr))');
     expect(css).toContain(
-      '@media (max-width:500px){.ddr-viewer{height:auto;grid-template-rows:none;grid-template-columns:minmax(0,1fr);grid-auto-rows:auto}.ddr-viewer>.ddr-item{grid-column:1/-1;grid-row:auto}',
+      '@media (max-width:500px){.ddr-viewer{height:auto;min-height:0;grid-template-rows:none;grid-template-columns:minmax(0,1fr);grid-auto-rows:auto}.ddr-viewer>.ddr-item{grid-column:1/-1;grid-row:auto}',
+    );
+  });
+
+  it('minHeight 는 기본 200px 이고 지정/0 으로 바꿀 수 있으며 모바일에서는 해제된다', () => {
+    expect(renderViewer(single, { fitHeight: true }).css).toContain('height:100%;min-height:200px;');
+    expect(renderViewer(single, { fitHeight: { minHeight: 320 } }).css).toContain('height:100%;min-height:320px;');
+    expect(renderViewer(single, { fitHeight: { minHeight: 0 } }).css).toContain('height:100%;min-height:0px;');
+    expect(renderViewer(single, { fitHeight: { minHeight: -5 } }).css).toContain('min-height:200px;');
+    expect(renderViewer(single, { fitHeight: true }).css).toContain(
+      '@media (max-width:767px){.ddr-viewer{height:auto;min-height:0;',
     );
   });
 

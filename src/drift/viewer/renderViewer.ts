@@ -30,7 +30,15 @@ export interface ViewerOptions {
 export interface ViewerFitHeightOptions {
   /** 행의 최소 높이(px). 행이 많아 이보다 작아지면 최소 높이를 지키고 뷰어가 스크롤된다. 기본 0 */
   minRowHeight?: number;
+  /**
+   * 컨테이너의 최소 높이(px). 부모가 이보다 낮거나 높이가 없어도 이 높이는 지킨다. 기본 200, 0 이면 제한하지 않는다.
+   * 모바일 폭(mobileMaxWidth 이하)에서는 fitHeight 자체가 꺼지므로 적용되지 않는다.
+   */
+  minHeight?: number;
 }
+
+/** fitHeight 컨테이너의 기본 최소 높이(px) */
+export const DEFAULT_FIT_MIN_HEIGHT = 200;
 
 /** fitHeight 에서 모바일로 보는 기본 폭(px) */
 export const DEFAULT_MOBILE_MAX_WIDTH = 767;
@@ -78,6 +86,7 @@ export function renderViewer(input: DriftLayout | string | unknown, options: Vie
 
 interface Fit {
   minRowHeight: number;
+  minHeight: number;
 }
 
 /** 모바일 폭(px). 지정하지 않았고 fitHeight 도 아니면 undefined (breakpoints 사용) */
@@ -88,8 +97,10 @@ function resolveMobile(input: number | undefined, fit?: Fit): number | undefined
 
 function resolveFit(input: ViewerOptions['fitHeight']): Fit | undefined {
   if (!input) return undefined;
-  const min = input === true ? undefined : input.minRowHeight;
-  return { minRowHeight: typeof min === 'number' && Number.isFinite(min) && min >= 0 ? min : 0 };
+  const valid = (v: unknown, fallback: number): number =>
+    typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : fallback;
+  const o = input === true ? {} : input;
+  return { minRowHeight: valid(o.minRowHeight, 0), minHeight: valid(o.minHeight, DEFAULT_FIT_MIN_HEIGHT) };
 }
 
 type Axis = 'x' | 'y' | 'w' | 'h';
@@ -198,7 +209,11 @@ function buildCss(
       sorted.reduce((max, item) => Math.max(max, item.y + item.h), 0),
       1,
     );
-    rules.push(`${root}{height:100%;grid-template-rows:repeat(${rows},minmax(${fmt(fit.minRowHeight)}px,1fr))}`);
+    rules.push(
+      `${root}{height:100%;min-height:${fmt(fit.minHeight)}px;grid-template-rows:repeat(${rows},minmax(${fmt(
+        fit.minRowHeight,
+      )}px,1fr))}`,
+    );
   }
 
   // 큰 breakpoint 부터 max-width 미디어 쿼리로 덮어쓴다. 이전 단계와 달라진 값만 출력
@@ -214,7 +229,7 @@ function buildCss(
     const heights = Array.from(new Set(sorted.map((item) => item.h))).sort((p, q) => p - q);
     const stack = [
       `${root}{${
-        fit ? 'height:auto;grid-template-rows:none;' : ''
+        fit ? 'height:auto;min-height:0;grid-template-rows:none;' : ''
       }grid-template-columns:minmax(0,1fr);grid-auto-rows:auto}`,
       `${root}>.${scope}-item{grid-column:1/-1;grid-row:auto}`,
       ...heights.map((h) => `${root}>[data-h="${fmt(h)}"]{height:${fmt(h * layout.rowHeight)}px}`),

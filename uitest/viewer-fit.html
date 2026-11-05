@@ -71,6 +71,7 @@
       <label><input type="checkbox" id="fit" checked /> fitHeight</label>
       <label>mobileMaxWidth <input type="number" id="mobile" value="767" min="0" step="10" /></label>
       <label>minRowHeight <input type="number" id="minRow" value="0" min="0" step="10" /></label>
+      <label>minHeight <input type="number" id="minH" value="200" min="0" step="50" /></label>
       <label><input type="checkbox" id="fixed" /> 부모 높이 420px 고정</label>
     </div>
     <div id="info"></div>
@@ -106,7 +107,7 @@
           items: SAMPLES[$('sample').value],
         };
         const fitHeight = $('fit').checked
-          ? { minRowHeight: Number($('minRow').value) }
+          ? { minRowHeight: Number($('minRow').value), minHeight: Number($('minH').value) }
           : false;
         const { html, css } = renderViewer(layout, { fitHeight, mobileMaxWidth: Number($('mobile').value) });
         $('viewerCss').textContent = css;
@@ -124,7 +125,7 @@
         )}px · grid-template-rows: ${rows}`;
       }
 
-      ['sample', 'fit', 'mobile', 'minRow', 'fixed'].forEach((id) => $(id).addEventListener('input', render));
+      ['sample', 'fit', 'mobile', 'minRow', 'minH', 'fixed'].forEach((id) => $(id).addEventListener('input', render));
       new ResizeObserver(updateInfo).observe($('host'));
       addEventListener('resize', updateInfo);
       render();
