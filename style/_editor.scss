@@ -282,6 +282,25 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
 }
 
+/* 컨테이너 간 이동: 포인터를 따라가는 복제본(body 에 부착)과, 원본 캔버스에 원위치로 남은 항목 */
+.ddr-transfer-ghost {
+  position: fixed;
+  z-index: 2147483000;
+  margin: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0.85;
+  background: $drift-item-bg;
+  border: 1px solid $drift-accent;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.ddr-editor .ddr-item.ddr-transfer-source {
+  opacity: 0.35;
+}
+
 .ddr-editor.ddr-dragin-over .daracl-drift {
   outline: 2px dashed $drift-accent;
   outline-offset: -2px;
@@ -308,6 +327,21 @@
       &[data-dir='sw']::after {
         right: auto;
         left: 0;
+      }
+
+      /* 변 가운데 핸들(e/w/s)은 카드 본문 쪽으로 44px 를 넓히면 작은 카드의 본문 한가운데를 덮어
+         본문 스와이프(페이지 스크롤)가 리사이즈로 바뀐다. 핸들 중심 기준으로 변을 따라 44px, 안쪽으로는 28px 만 넓힌다.
+         (s 는 90도 회전되어 있어 로컬 width/height 가 화면에서 서로 바뀌므로 세 방향 모두 같은 값이 된다) */
+      &[data-dir='e']::after,
+      &[data-dir='w']::after,
+      &[data-dir='s']::after {
+        top: 50%;
+        right: auto;
+        bottom: auto;
+        left: 50%;
+        width: 28px;
+        height: $drift-touch-target;
+        transform: translate(-50%, -50%);
       }
     }
 

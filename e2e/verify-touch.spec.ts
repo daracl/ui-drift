@@ -83,10 +83,16 @@ test.describe('[TCH] 모바일 터치', () => {
       expect(b.x).toBeGreaterThanOrEqual(canvas.x - 1);
       expect(b.x + b.width).toBeLessThanOrEqual(canvas.x + canvas.width + 1);
     }
-    // 회전 후에도 터치 드래그가 동작한다
+    // 회전 후에도 터치 드래그가 동작한다.
+    // 가로 모드는 화면이 낮아 카드가 아래 끝에 걸리고 이동 목표가 화면 밖으로 나가므로, 카드를 화면 위쪽으로 올린 뒤 끈다
+    await page.locator(item('a')).evaluate((el) => el.scrollIntoView({ block: 'start' }));
+    await page.waitForTimeout(100);
     const h = await box(page, `${item('a')} .ddr-handle`);
+    const vh = page.viewportSize()!.height; // eslint-disable-line @typescript-eslint/no-non-null-assertion
     const before = await getItem(page, 'a');
     const m = await page.evaluate(() => (window as any).editor.getMetrics());
+    // 시작점과 목표점 모두 화면 안 (자동 스크롤 영역 48px 밖)
+    expect(h.y + h.height / 2 + 2 * (m.rowHeight + m.gap)).toBeLessThan(vh - 48);
     await touch(
       page,
       line(
@@ -109,5 +115,38 @@ test.describe('[TCH] 모바일 터치', () => {
     });
     expect(r.resize).toBeGreaterThanOrEqual(44);
     expect(r.remove).toBeGreaterThanOrEqual(36);
+  });
+
+  test('TCH-05 확장된 리사이즈 터치 영역이 카드 본문 중앙·드래그 핸들 중앙을 덮지 않는다', async ({ page }) => {
+    // 변 가운데 핸들(e/w/s)의 44px 터치 영역이 작은 카드의 본문/제목 막대를 덮으면
+    // 본문 스와이프(페이지 스크롤)나 핸들 드래그가 리사이즈로 바뀐다 (이전 '본문 스와이프', TCH-03 실패의 원인)
+    const hits = await page.evaluate(() =>
+      [...document.querySelectorAll<HTMLElement>('.ddr-item')].flatMap((card) => {
+        const id = card.dataset.driftId as string;
+        return ['.ddr-content', '.ddr-handle'].map((sel) => {
+          const r = (card.querySelector(sel) as HTMLElement).getBoundingClientRect();
+          card.scrollIntoView({ block: 'center' });
+          const b = (card.querySelector(sel) as HTMLElement).getBoundingClientRect();
+          const el = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2) as HTMLElement | null;
+          return {
+            id,
+            sel,
+            hit: el?.closest('.ddr-resize-handle')?.getAttribute('data-dir') ?? null,
+            h: Math.round(r.height),
+          };
+        });
+      }),
+    );
+    expect(hits.filter((x) => x.hit !== null)).toEqual([]);
+    // 변 핸들의 터치 영역은 변을 따라 44px 이상이다 (s 는 90도 회전되어 로컬 height 가 화면의 가로)
+    const along = await page.evaluate(() =>
+      ['e', 'w', 's'].map((dir) => {
+        const el = document.querySelector(
+          '[data-drift-id="a"] .ddr-resize-handle[data-dir="' + dir + '"]',
+        ) as HTMLElement;
+        return parseFloat(getComputedStyle(el, '::after').height);
+      }),
+    );
+    along.forEach((v) => expect(v).toBeGreaterThanOrEqual(44));
   });
 });

@@ -9,6 +9,7 @@ import { applyItems, getBreakpoints, matchBreakpoint, resolveItems } from '@/dri
 import { Emitter } from '@/event/Emitter';
 import {
   DriftApplyOptions,
+  DriftChangeInfo,
   DriftChangeReason,
   DriftChangeSource,
   DriftDragInOptions,
@@ -23,9 +24,10 @@ import {
   DriftSyncResult,
 } from '@t/DriftEditor';
 import { DriftBreakpoint, DriftGeometry, DriftItem, DriftLayout, DriftMetrics } from '@t/DriftLayout';
-import { History } from './History';
+import { History, HistoryLink, HistorySnapshot } from './History';
+import type { PointerTransferHost } from './PointerController';
 import { GeometryStyle } from './GeometryStyle';
-import { DragInController } from './DragInController';
+import { DragInController, editorDragInHost } from './DragInController';
 import { PointerController } from './PointerController';
 import { CLS } from './classNames';
 import { resolveScrollElement } from './scrollContainer';
@@ -50,6 +52,23 @@ const cancelRaf = (id: number): void =>
   typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame(id) : clearTimeout(id);
 
 export type DriftItemPatch = Partial<Omit<DriftItem, 'id'>>;
+
+/** 컨테이너 요소 → 그 요소를 사용 중인 에디터. 같은 요소에 에디터가 겹쳐 만들어지는 것을 막는 데 쓴다 (DriftManager) */
+const instances = new WeakMap<HTMLElement, DriftEditor>();
+
+/** @internal 컨테이너 요소를 사용 중인(destroy 되지 않은) 에디터 */
+export function getEditorOf(container: HTMLElement): DriftEditor | undefined {
+  return instances.get(container);
+}
+
+/** @internal 컨테이너 간 이동 트랜잭션의 롤백 정보 (DriftManager 가 사용) */
+export interface EditorTxToken {
+  layout: DriftLayout;
+  selectedId: string | null;
+  history: HistorySnapshot<DriftLayout>;
+  /** 변경 전 화면 항목 (layoutChange 의 changes 계산용) */
+  before: DriftItem[];
+}
 
 /** 호출별 옵션을 에디터 기본값과 합쳐 확정한 값 */
 interface Applied {
@@ -110,6 +129,14 @@ export class DriftEditor {
   private selectedId: string | null = null;
   private resizeObserver?: ResizeObserver;
   private destroyed = false;
+  /** 외부 끌어오기가 이 캔버스를 미리보기하는 중 (공유 컨트롤러 포함). 이 동안에는 크기 변화로 다시 그리지 않는다 */
+  private dragInOver = false;
+  /** 모델/breakpoint 가 바뀔 때마다 증가한다 (진행 중 세션이 오래된 상태로 커밋하지 않게 하는 데 쓴다) */
+  private revision = 0;
+  /** 컨테이너 간 이동을 조정하는 쪽 (DriftManager). 없으면 기존 단일 에디터 드래그만 한다 */
+  private transferHost?: PointerTransferHost;
+  /** 드래그 중 고정한 캔버스 높이(px) */
+  private heightLock?: number;
   private pointer: PointerController;
   private dragIn: DragInController;
   private gridEnabled: boolean;
@@ -174,7 +201,9 @@ export class DriftEditor {
     this.measure();
     this.watchSize();
     this.pointer = new PointerController(this, this.abort.signal);
-    this.dragIn = new DragInController(this, this.abort.signal);
+    this.dragIn = new DragInController(editorDragInHost(this));
+    // 여기부터는 destroy() 로 정리할 수 있는 상태다. 이후 렌더링에서 예외가 나도 getEditorOf() 로 찾아 해제할 수 있다
+    instances.set(container, this);
     this.updateBreakpoint(false);
     this.render();
     this.throwHookError();
@@ -351,6 +380,7 @@ export class DriftEditor {
     const wantEvent = r.emit && this.emitter.has('layoutChange');
     const before = wantEvent ? this.getItems() : [];
     this.layout = parseLayout(layout);
+    this.revision++;
     this.initial = this.layout;
     this.baseline = serializeLayout(this.layout);
     this.history.clear();
@@ -461,7 +491,10 @@ export class DriftEditor {
 
   /** 내부 이력이 꺼져 있으면(`history:false`) 항상 false 를 반환한다 */
   undo(opts?: DriftApplyOptions): boolean {
-    if (!this.historyEnabled) return false;
+    if (!this.historyEnabled || this.destroyed) return false;
+    // 컨테이너 간 이동 기록은 두 에디터를 함께 되돌린다 (양쪽 맨 위일 때만 가능)
+    const link = this.history.peekLink('undo');
+    if (link) return link.run('undo', opts);
     const prev = this.history.undo(this.layout);
     if (!prev) return false;
     this.replace(prev, 'undo', this.applied(opts));
@@ -469,7 +502,9 @@ export class DriftEditor {
   }
 
   redo(opts?: DriftApplyOptions): boolean {
-    if (!this.historyEnabled) return false;
+    if (!this.historyEnabled || this.destroyed) return false;
+    const link = this.history.peekLink('redo');
+    if (link) return link.run('redo', opts);
     const next = this.history.redo(this.layout);
     if (!next) return false;
     this.replace(next, 'redo', this.applied(opts));
@@ -477,11 +512,15 @@ export class DriftEditor {
   }
 
   canUndo(): boolean {
-    return this.historyEnabled && this.history.canUndo();
+    if (!this.historyEnabled || this.destroyed) return false;
+    const link = this.history.peekLink('undo');
+    return link ? link.canRun('undo') : this.history.canUndo();
   }
 
   canRedo(): boolean {
-    return this.historyEnabled && this.history.canRedo();
+    if (!this.historyEnabled || this.destroyed) return false;
+    const link = this.history.peekLink('redo');
+    return link ? link.canRun('redo') : this.history.canRedo();
   }
 
   /** 내부 undo/redo 기록 사용 여부 (옵션 history) */
@@ -598,7 +637,13 @@ export class DriftEditor {
 
   /** @internal 외부 요소를 캔버스 위로 끌고 있는 동안의 표시 */
   setDragInOver(over: boolean): void {
+    this.dragInOver = over;
     this.container.classList.toggle(CLS.dragInOver, over);
+  }
+
+  /** destroy() 가 호출되었는지 */
+  isDestroyed(): boolean {
+    return this.destroyed;
   }
 
   /** 배경 셀 격자 표시 여부를 바꾼다 */
@@ -647,8 +692,24 @@ export class DriftEditor {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
-    this.pointer.cancel();
-    this.dragIn.dispose();
+    if (instances.get(this.container) === this) instances.delete(this.container);
+    // 해제를 시작하기 전에 알린다 (DriftManager 등이 등록 정보와 공유 끌어오기의 미리보기를 정리한다)
+    try {
+      this.emitter.emit('destroy');
+    } catch (e) {
+      this.captureHookError(e);
+    }
+    // 진행 중 세션 취소가 이벤트 리스너(dragInEnd 등) 예외를 내도 해제는 끝까지 진행하고, 마지막에 첫 예외를 던진다
+    try {
+      this.pointer.cancel();
+    } catch (e) {
+      this.captureHookError(e);
+    }
+    try {
+      this.dragIn.dispose();
+    } catch (e) {
+      this.captureHookError(e);
+    }
     // 예약된 크기 알림은 실행되지 않게 취소한다
     if (this.sizeScheduled) cancelRaf(this.sizeRaf);
     this.sizeScheduled = false;
@@ -656,6 +717,12 @@ export class DriftEditor {
     this.liveSizes.clear();
     // 외부 인스턴스를 가진 콘텐츠는 DOM 을 지우기 전에 해제한다
     this.itemEls.forEach((el) => this.unmountContent(el));
+    // 이 에디터의 연결 이력(컨테이너 간 이동)을 무효화한다. 상대 에디터가 오래된 스냅샷으로 항목을 복제하지 않게 절단된다
+    try {
+      this.history.clear();
+    } catch (e) {
+      this.captureHookError(e);
+    }
     this.abort.abort();
     this.resizeObserver?.disconnect();
     this.geo.destroy();
@@ -699,6 +766,10 @@ export class DriftEditor {
 
   /** @internal 캔버스 높이를 항목 하단 + 여분 행에 맞춘다 */
   applyCanvasHeight(items: readonly DriftItem[], metrics = this.getMetrics()): void {
+    if (this.heightLock !== undefined) {
+      this.element.style.height = `${this.heightLock}px`;
+      return;
+    }
     const rows = getRowCount(items) + this.options.extraRows;
     this.element.style.height = `${Math.max(0, rows * (metrics.rowHeight + metrics.gap) - metrics.gap)}px`;
   }
@@ -1004,6 +1075,7 @@ export class DriftEditor {
     const wantEvent = r.emit && this.emitter.has('layoutChange');
     const before = wantEvent ? this.getItems() : [];
     this.layout = next;
+    this.revision++;
     if (this.selectedId && !next.items.some((item) => item.id === this.selectedId)) this.selectedId = null;
     this.updateBreakpoint(true);
     const after = this.render();
@@ -1022,13 +1094,131 @@ export class DriftEditor {
     r: Applied,
     before: readonly DriftItem[],
     after: readonly DriftItem[],
+    transactionId?: string,
   ): void {
     if (!r.emit || !this.emitter.has('layoutChange')) return;
-    this.emitter.emit('layoutChange', cloneLayout(layout), {
-      reason,
-      source: r.source,
-      changes: diffItems(before, after),
-    });
+    const info: DriftChangeInfo = { reason, source: r.source, changes: diffItems(before, after) };
+    if (transactionId !== undefined) info.transactionId = transactionId;
+    this.emitter.emit('layoutChange', cloneLayout(layout), info);
+  }
+
+  // ───────────────────────────── 컨테이너 간 이동 트랜잭션 (내부, DriftManager 전용) ─────────────────────────────
+  // 두 에디터의 모델을 "준비된 상태로 반영(렌더) → 실패 시 복원 → 이력 기록 → 알림" 단계로 나눠 처리한다.
+  // 각 단계는 이 에디터의 commit/replace 책임을 그대로 따르며, Manager 는 private 상태를 직접 건드리지 않는다.
+
+  /** @internal 모델/breakpoint 변경 횟수 (진행 중 세션의 stale 판정용) */
+  getRevision(): number {
+    return this.revision;
+  }
+
+  /** @internal 프로그램 변경 이벤트를 내는지 (옵션 programmaticEvents) */
+  emitsProgrammatic(): boolean {
+    return this.programmaticEvents;
+  }
+
+  /** @internal */
+  setTransferHost(host: PointerTransferHost | undefined): void {
+    this.transferHost = host;
+  }
+
+  /** @internal */
+  getTransferHost(): PointerTransferHost | undefined {
+    return this.transferHost;
+  }
+
+  /**
+   * @internal 캔버스 높이를 고정한다(undefined 면 해제 후 항목에 맞춘다).
+   * 컨테이너 간 이동이 가능한 드래그 동안 원본 미리보기가 캔버스를 늘려 아래 컨테이너가 포인터를 피해 밀려나지 않게 한다.
+   */
+  lockHeight(px: number | undefined): void {
+    this.heightLock = px;
+    if (px === undefined) this.applyCanvasHeight(this.getItems());
+    else this.element.style.height = `${px}px`;
+  }
+
+  /** @internal 진행 중인 포인터 드래그/리사이즈를 취소한다 (원위치) */
+  cancelPointer(): void {
+    this.pointer.cancel();
+  }
+
+  /** @internal 롤백에 필요한 현재 상태를 보관한다 */
+  txBegin(): EditorTxToken {
+    return {
+      layout: this.layout,
+      selectedId: this.selectedId,
+      history: this.history.export(),
+      before: this.getItems(),
+    };
+  }
+
+  /** @internal 준비된 레이아웃을 이벤트/이력 없이 반영하고 렌더링한다. 콘텐츠 훅 예외는 보관된다(txTakeError) */
+  txApply(next: DriftLayout): void {
+    this.layout = next;
+    this.revision++;
+    if (this.selectedId && !next.items.some((item) => item.id === this.selectedId)) this.selectedId = null;
+    this.updateBreakpoint(false);
+    this.render();
+    this.scheduleSizeCheck();
+  }
+
+  /** @internal 이력 한 단계를 꺼내 그 상태를 돌려준다 (연결 undo/redo). 적용은 txApply 로 한다 */
+  txHistoryStep(kind: 'undo' | 'redo'): DriftLayout | undefined {
+    return kind === 'undo' ? this.history.undo(this.layout) : this.history.redo(this.layout);
+  }
+
+  /** @internal 다음 undo/redo 항목의 연결 기록 */
+  txPeekLink(kind: 'undo' | 'redo'): HistoryLink | undefined {
+    return this.historyEnabled ? this.history.peekLink(kind) : undefined;
+  }
+
+  /**
+   * @internal 이동을 이력에 남긴다. link 가 있으면 이동 직전 상태를 연결 기록으로 쌓고,
+   * 없으면(어느 한쪽이 history:false) 이전 이력을 비운다 (오래된 스냅샷 undo 로 항목이 복제되지 않게).
+   */
+  txRecord(token: EditorTxToken, link: HistoryLink | null): void {
+    if (link && this.historyEnabled) this.history.push(token.layout, link);
+    else this.history.clear();
+  }
+
+  /** @internal 연결 기록과 그것을 가로질러야 도달하는 이력을 버린다 (상대 쪽 기록이 사라졌을 때) */
+  txCut(link: HistoryLink): void {
+    this.history.cut(link);
+  }
+
+  /** @internal txBegin 시점의 모델·선택·이력으로 되돌린다. 복원 렌더의 훅 예외는 버린다(원래 예외를 우선) */
+  txRollback(token: EditorTxToken): void {
+    if (this.destroyed) return;
+    this.layout = token.layout;
+    this.revision++;
+    this.selectedId = token.selectedId;
+    this.history.restore(token.history);
+    this.updateBreakpoint(false);
+    this.render();
+    this.scheduleSizeCheck();
+    this.hookError = undefined;
+  }
+
+  /** @internal 렌더 중 보관된 콘텐츠 훅 예외를 꺼낸다 */
+  txTakeError(): { error: unknown } | undefined {
+    const err = this.hookError;
+    this.hookError = undefined;
+    return err;
+  }
+
+  /** @internal 반영된 변경을 알린다 (layoutChange 에 transactionId, 이동이면 add/remove 이벤트). 리스너 예외는 그대로 전파된다 */
+  txNotify(
+    reason: DriftChangeReason,
+    source: DriftChangeSource,
+    token: EditorTxToken,
+    transactionId: string,
+    itemEvent?: { type: 'add' | 'remove'; item: DriftItem },
+  ): void {
+    if (this.destroyed) return;
+    const r = this.applied({ source });
+    if (r.emit && this.emitter.has('layoutChange')) {
+      this.emitChange(this.layout, reason, r, token.before, this.getItems(), transactionId);
+    }
+    if (itemEvent && r.emit) this.emitter.emit(itemEvent.type, cloneItem(itemEvent.item));
   }
 
   // ───────────────────────────── 크기 변경 알림 ─────────────────────────────
@@ -1117,7 +1307,7 @@ export class DriftEditor {
   private watchSize(): void {
     if (typeof ResizeObserver === 'undefined') return;
     this.resizeObserver = new ResizeObserver(() => {
-      if (this.destroyed || this.pointer.isActive() || this.dragIn.isActive()) return;
+      if (this.destroyed || this.pointer.isActive() || this.dragIn.isActive() || this.dragInOver) return;
       if (this.measure()) {
         this.updateBreakpoint(true);
         this.render();
@@ -1135,6 +1325,7 @@ export class DriftEditor {
     else if (mode === 'auto') this.activeBreakpoint = matchBreakpoint(this.layout, this.width);
     else this.activeBreakpoint = getBreakpoints(this.layout).find((bp) => bp.name === mode);
 
+    if (prev?.name !== this.activeBreakpoint?.name) this.revision++;
     if (notify && prev !== this.activeBreakpoint && prev?.name !== this.activeBreakpoint?.name) {
       this.emitter.emit('breakpointChange', this.activeBreakpoint || null);
     }

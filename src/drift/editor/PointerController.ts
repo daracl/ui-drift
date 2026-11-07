@@ -6,6 +6,29 @@ import type { DriftEditor } from './DriftEditor';
 import { CLS } from './classNames';
 import { measureScrollTarget } from './scrollContainer';
 
+/**
+ * 포인터가 원본 캔버스를 벗어났을 때의 상태
+ * - source: 원본 캔버스 위(기존 드래그 그대로)
+ * - away: 다른 컨테이너 위 또는 모든 캔버스 밖(이동 모드: ghost 가 따라가고 원본은 원위치 미리보기)
+ * - cancel: 세션을 취소해야 함(stale, 옵션 해제)
+ */
+export type TransferMoveState = 'source' | 'away' | 'cancel';
+
+/**
+ * 컨테이너 간 이동을 조정하는 쪽(DriftManager 의 TransferController)이 구현한다.
+ * PointerController 는 대상 판정, 대상 미리보기, 커밋을 모두 위임하고 원본 쪽 표시만 바꾼다.
+ */
+export interface PointerTransferHost {
+  /** 드래그가 시작될 때: 이 세션을 이동 가능 세션으로 시작할지 (옵션이 꺼져 있으면 false) */
+  begin(source: DriftEditor, itemId: string, el: HTMLElement): boolean;
+  /** 포인터 위치를 판정하고(대상 미리보기 포함) 상태를 돌려준다 */
+  move(source: DriftEditor, clientX: number, clientY: number, grabX: number, grabY: number): TransferMoveState;
+  /** 세션 정리 (ghost, 대상 미리보기). 커밋 전에 호출된다 */
+  end(source: DriftEditor): void;
+  /** 정리가 끝난 뒤 이동을 커밋한다. 성공하면 대상의 항목(복사본), 거절/밖이면 undefined */
+  drop(source: DriftEditor): DriftItem | undefined;
+}
+
 /** a 가 b 와 겹치는 면적이 a 면적에서 차지하는 비율 */
 function overlapRatio(a: DriftRect, b: DriftRect): number {
   const w = Math.min(a.left + a.width, b.left + b.width) - Math.max(a.left, b.left);
@@ -66,6 +89,10 @@ interface Session {
   /** 자동 스크롤 대상 요소 캐시. 스타일 계산(getComputedStyle)이 비싸므로 일정 시간마다만 다시 찾는다 */
   scrollEl?: HTMLElement;
   scrollAt: number;
+  /** 컨테이너 간 이동이 가능한 세션 (DriftManager 의 crossContainerDrag) */
+  transfer?: PointerTransferHost;
+  /** 포인터가 원본 캔버스를 벗어나 이동 모드에 있다 */
+  away: boolean;
 }
 
 /**
@@ -168,6 +195,7 @@ export class PointerController {
       dragLeft: 0,
       dragTop: 0,
       scrollAt: -Infinity,
+      away: false,
     };
     try {
       el.setPointerCapture?.(e.pointerId);
@@ -214,6 +242,13 @@ export class PointerController {
     placeholder.hidden = false;
     void placeholder.offsetWidth; // 강제 reflow: 위치가 확정된 뒤에 transition 을 복원한다
     placeholder.style.transition = '';
+    // 크기 조절 중에는 컨테이너 이동으로 바뀌지 않는다
+    const host = s.kind === 'drag' ? this.editor.getTransferHost() : undefined;
+    if (host && host.begin(this.editor, s.id, s.el)) {
+      s.transfer = host;
+      // 미리보기로 원본 캔버스가 늘어나면 아래 컨테이너가 포인터를 피해 계속 밀려나므로 세션 동안 높이를 고정한다
+      this.editor.lockHeight(canvasEl.getBoundingClientRect().height);
+    }
     this.editor.emit(s.kind === 'drag' ? 'dragStart' : 'resizeStart', s.origin);
   }
 
@@ -227,6 +262,20 @@ export class PointerController {
     let key: string;
     let preview: DriftItem[];
     let target: { x: number; y: number; w: number; h: number };
+
+    if (s.kind === 'drag' && s.transfer) {
+      // 다른 컨테이너 위인지, 원본 위인지 판정한다 (대상 미리보기는 host 가 맡는다)
+      const state = s.transfer.move(editor, s.clientX, s.clientY, s.grabX, s.grabY);
+      if (state === 'cancel') {
+        this.cancel();
+        return;
+      }
+      if (state === 'away') {
+        this.setAway(s, true);
+        return;
+      }
+      if (s.away) this.setAway(s, false);
+    }
 
     if (s.kind === 'drag') {
       const maxLeft = Math.max(0, canvas.width - originRect.width);
@@ -360,9 +409,45 @@ export class PointerController {
 
   // ───────────────────────────── 종료 ─────────────────────────────
 
+  /** 이동 모드 진입/복귀: 원본에서는 항목을 원위치에 흐리게 두고 미리보기를 걷어낸다 */
+  private setAway(s: Session, away: boolean): void {
+    if (s.away === away) return;
+    s.away = away;
+    s.lastKey = '';
+    const placeholder = this.editor.getPlaceholder();
+    s.el.classList.toggle(CLS.transferSource, away);
+    if (away) {
+      s.el.style.transform = '';
+      s.preview = s.snapshot;
+      s.phRect = undefined;
+      placeholder.hidden = true;
+      placeholder.classList.remove(CLS.placeholderInvalid);
+      this.editor.renderItems(s.snapshot, s.id);
+    } else {
+      placeholder.hidden = false;
+    }
+  }
+
   private onUp(e: PointerEvent): void {
     const s = this.session;
     if (!s || e.pointerId !== s.pointerId) return;
+
+    if (s.active && s.transfer) {
+      // 놓는 순간의 위치로 대상과 유효성을 한 번 더 확정한다 (stale/옵션 해제면 update 안에서 취소된다)
+      s.clientX = e.clientX;
+      s.clientY = e.clientY;
+      this.update(s);
+      if (this.session !== s) return;
+      if (s.away) {
+        const host = s.transfer;
+        const { origin } = s;
+        // 세션·ghost·placeholder·capture·RAF 를 정리한 뒤 한 트랜잭션으로 반영한다
+        this.finish(s);
+        const moved = host.drop(this.editor);
+        this.editor.emit('dragEnd', moved ?? origin);
+        return;
+      }
+    }
 
     const { active, kind, preview, origin, id } = s;
     this.finish(s);
@@ -382,6 +467,13 @@ export class PointerController {
 
   /** 세션 상태를 정리한다. 요소의 최종 위치는 호출한 쪽에서 render 로 맞춘다 */
   private finish(s: Session): void {
+    if (s.transfer) {
+      try {
+        s.transfer.end(this.editor);
+      } finally {
+        s.el.classList.remove(CLS.transferSource);
+      }
+    }
     if (s.scrollRaf && typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(s.scrollRaf);
     this.session = undefined;
     try {
@@ -401,6 +493,7 @@ export class PointerController {
     s.el.classList.remove(CLS.dragging, CLS.resizing);
     s.el.style.removeProperty('transition');
     this.editor.element.style.width = '';
+    if (s.transfer) this.editor.lockHeight(undefined);
     this.editor.getPlaceholder().hidden = true;
     this.editor.getPlaceholder().classList.remove(CLS.placeholderInvalid);
     this.editor.invalidateRect(s.el);

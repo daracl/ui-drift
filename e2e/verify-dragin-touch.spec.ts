@@ -67,8 +67,16 @@ test.describe('[DIN] 모바일 터치로 외부 요소를 끌어서 추가', () 
     await page.evaluate(() => window.scrollTo(0, 0));
     const src = await box(page, '.pal >> nth=0');
     const canvas = await box(page, '.daracl-drift');
-    await touch(page, line({ x: src.x + 10, y: src.y + 10 }, { x: canvas.x + 100, y: canvas.y + 100 }));
+    const before = await page.evaluate(() => (window as any).editor.getItems().length);
+    // 목표점은 화면 아래 가장자리 48px 의 자동 스크롤 영역 밖이어야 한다.
+    // (그 안에서 멈추면 끌어오기 자동 스크롤이 의도대로 동작해 scrollY 가 바뀐다: 이전 실패 원인)
+    const vh = page.viewportSize()!.height; // eslint-disable-line @typescript-eslint/no-non-null-assertion
+    const target = { x: canvas.x + 100, y: Math.min(canvas.y + 100, vh - 100) };
+    expect(target.y).toBeGreaterThan(canvas.y);
+    await touch(page, line({ x: src.x + 10, y: src.y + 10 }, target));
     expect(await page.evaluate(() => window.scrollY)).toBe(0); // 페이지가 스크롤되지 않았다
+    // 스크롤 대신 드래그되어 항목이 추가되었다
+    expect(await page.evaluate(() => (window as any).editor.getItems().length)).toBe(before + 1);
   });
 
   test('DIN-T4 터치 + autoAdd:false: onDrop 에 breakpoint 칸 기준 정보가 전달되고 레이아웃은 그대로다', async ({

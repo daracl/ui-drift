@@ -7,6 +7,7 @@ import type { DriftEditor } from './DriftEditor';
 import type { DriftItemInput } from '@/drift/core/operations';
 import { CLS } from './classNames';
 import { measureScrollTarget } from './scrollContainer';
+import { CanvasHit, isOverCanvas, pickCanvas } from './canvasHit';
 
 /** 클릭과 드래그를 구분하는 이동 임계값(px) */
 const DRAG_THRESHOLD = 3;
@@ -17,9 +18,29 @@ const SCROLL_RESOLVE_MS = 250;
 /** 미리보기 계산에 쓰는 임시 항목 id (사용자 id 와 겹치지 않는다) */
 const TEMP_ID = '\u0000ddr-dragin';
 
+/**
+ * 끌어오기 컨트롤러를 소유한 쪽(단일 에디터 또는 DriftManager)이 제공하는 연결점.
+ * 컨트롤러는 대상이 몇 개인지 모른 채 "포인터 아래의 대상 에디터" 하나만 다룬다.
+ */
+export interface DragInHost {
+  /** 드롭 대상 후보 (앞에 있는 것이 우선. 화면에서 겹치면 실제로 포인터 아래에 있는 것을 고른다) */
+  targets(): readonly DriftEditor[];
+  /** 이 요소에서 시작한 pointerdown 은 끌어오기로 보지 않는다 (에디터 캔버스 내부 등) */
+  ignores(target: Element): boolean;
+  /** 끌기 시작 (임계값 이상 움직였을 때) */
+  start(source: HTMLElement): void;
+  /** 끌기 종료. 추가된 항목(없으면 null)과 드롭한 대상(취소/대상 밖이면 null) */
+  end(item: DriftItem | null, target: DriftEditor | null): void;
+}
+
+/** 내부 옵션: onDrop 이 대상 에디터를 함께 받는다 (단일 에디터용 공개 옵션과 호환된다) */
+export interface DragInEntryOptions extends Omit<DriftDragInOptions, 'onDrop'> {
+  onDrop?: (result: DriftDragInDropResult, target: DriftEditor) => void;
+}
+
 interface Entry {
   source: DriftDragInSource;
-  options: DriftDragInOptions;
+  options: DragInEntryOptions;
 }
 
 interface Session {
@@ -33,57 +54,78 @@ interface Session {
   active: boolean;
   ghost?: HTMLElement;
   input?: DriftItemInput;
+  /** 포인터 아래의 대상 에디터. 없으면 어느 캔버스 위에도 있지 않다 */
+  target?: DriftEditor;
+  /** 대상 에디터에 들어온 시점의 항목 목록 (미리보기의 기준) */
   snapshot: DriftItem[];
   lastKey: string;
-  over: boolean;
   cell: { x: number; y: number };
   /** 미리보기에서 계산된 최종 위치/크기 (충돌 재배치, float, min/max 반영). 캔버스 밖이면 없다 */
   placed?: DriftItem;
   clientX: number;
   clientY: number;
-  /** 활성화 시점 캔버스 높이의 행 수. 이보다 아래에는 마지막 항목 바로 아래까지만 놓을 수 있다 */
+  /** 대상에 들어온 시점 캔버스 높이의 행 수. 이보다 아래에는 마지막 항목 바로 아래까지만 놓을 수 있다 */
   baseRows: number;
   scrollRaf: number;
   scrollEl?: HTMLElement;
   scrollAt: number;
 }
 
+/** 단일 에디터용 연결점: 대상은 자기 자신 하나이고 이벤트는 에디터의 dragInStart/dragInEnd 로 낸다 */
+export function editorDragInHost(editor: DriftEditor): DragInHost {
+  const targets = [editor];
+  return {
+    targets: () => targets,
+    ignores: (target) => editor.element.contains(target),
+    start: (source) => editor.emit('dragInStart', source),
+    end: (item) => editor.emit('dragInEnd', item),
+  };
+}
+
 /**
  * 에디터 밖의 요소(팔레트 등)를 끌어다 놓아 컴포넌트를 추가한다. (GridStack 의 setupDragIn 에 해당)
  *
  * - Pointer Events 하나로 마우스/터치/펜을 처리한다. 원본 요소는 그대로 두고 복제본(ghost)이 포인터를 따라간다.
- * - 포인터가 캔버스 위에 있으면 placeholder 로 놓일 칸을 보여주고 기존 항목이 비켜가는 모습을 미리 보여준다.
+ * - 포인터가 대상 캔버스 위에 있으면 placeholder 로 놓일 칸을 보여주고 기존 항목이 비켜가는 모습을 미리 보여준다.
+ *   대상이 여러 개(DriftManager)이면 포인터 아래의 캔버스 하나만 미리보기하며, 대상이 바뀌면 이전 대상의 미리보기를 걷어낸다.
  * - 캔버스 밖에서 놓거나 Esc/pointercancel 이면 아무것도 추가하지 않는다.
- * - 모델은 drop 시 `editor.addItem()` 한 번으로만 바뀐다(히스토리/이벤트 1회).
+ * - 모델은 drop 시 대상 에디터의 `addItem()` 한 번으로만 바뀐다(히스토리/이벤트 1회).
+ * - document 리스너는 등록된 원본이 있거나 세션이 진행 중일 때만 붙어 있다 (에디터가 많아도 리스너가 늘지 않게).
  */
 export class DragInController {
   private readonly entries = new Set<Entry>();
   private session?: Session;
   private seq = 0;
+  private listening?: AbortController;
+  private disposed = false;
 
-  constructor(private readonly editor: DriftEditor, signal: AbortSignal) {
-    const opts = { signal };
-    document.addEventListener('pointerdown', (e) => this.onDown(e), opts);
-    document.addEventListener('pointermove', (e) => this.onMove(e), opts);
-    document.addEventListener('pointerup', (e) => this.onUp(e), opts);
-    document.addEventListener('pointercancel', (e) => this.onCancel(e), opts);
-    document.addEventListener('keydown', (e) => e.key === 'Escape' && this.cancel(), opts);
-  }
+  /** 소유자(에디터/Manager)가 해제 시 dispose() 를 호출해 리스너를 정리한다 */
+  constructor(private readonly host: DragInHost) {}
 
   isActive(): boolean {
     return !!this.session?.active;
   }
 
+  /** 진행 중인 세션의 대상 에디터 */
+  getTarget(): DriftEditor | undefined {
+    return this.session?.target;
+  }
+
   /** 끌어오기 원본을 등록한다. 반환된 함수로 해제한다 */
-  setup(source: DriftDragInSource, options: DriftDragInOptions = {}): () => void {
+  setup(source: DriftDragInSource, options: DragInEntryOptions = {}): () => void {
     const entry: Entry = { source, options };
     this.entries.add(entry);
+    this.listen();
     // 터치에서 브라우저 스크롤이 드래그를 가로채지 않도록 원본에 touch-action: none 을 적용한다
     this.sourcesOf(entry).forEach((el) => el.classList.add(CLS.dragInSource));
     return () => {
-      this.entries.delete(entry);
+      if (!this.entries.delete(entry)) return;
       this.sourcesOf(entry).forEach((el) => el.classList.remove(CLS.dragInSource));
-      if (this.session?.entry === entry) this.cancel();
+      try {
+        if (this.session?.entry === entry) this.cancel();
+      } finally {
+        this.unlisten();
+      }
     };
   }
 
@@ -92,14 +134,50 @@ export class DragInController {
     if (!s) return;
     const wasActive = s.active;
     this.finish(s);
-    if (wasActive) this.editor.emit('dragInEnd', null);
+    if (wasActive) this.host.end(null, null);
+  }
+
+  /**
+   * 대상 에디터가 더 이상 쓰일 수 없게 되었다(등록 해제/destroy). 진행 중인 세션이 그 에디터를 미리보기하고 있으면
+   * 미리보기를 걷어내고 대상 없음 상태로 둔다. 세션은 계속되며 포인터가 다른 대상 위로 가면 그 대상에 놓을 수 있다.
+   */
+  release(editor: DriftEditor): void {
+    const s = this.session;
+    if (s?.target === editor) this.leave(s);
   }
 
   /** 등록된 원본과 진행 중인 세션을 모두 정리한다 (destroy 에서 호출) */
   dispose(): void {
-    this.cancel();
-    this.entries.forEach((entry) => this.sourcesOf(entry).forEach((el) => el.classList.remove(CLS.dragInSource)));
-    this.entries.clear();
+    // 취소 알림(host.end)의 리스너가 예외를 던져도 원본 표시와 document 리스너는 반드시 정리한다
+    try {
+      this.cancel();
+    } finally {
+      this.entries.forEach((entry) => this.sourcesOf(entry).forEach((el) => el.classList.remove(CLS.dragInSource)));
+      this.entries.clear();
+      this.unlisten(true);
+    }
+  }
+
+  // ───────────────────────────── document 리스너 ─────────────────────────────
+
+  private listen(): void {
+    if (this.listening || this.disposed) return;
+    const ctrl = new AbortController();
+    this.listening = ctrl;
+    const opts = { signal: ctrl.signal };
+    document.addEventListener('pointerdown', (e) => this.onDown(e), opts);
+    document.addEventListener('pointermove', (e) => this.onMove(e), opts);
+    document.addEventListener('pointerup', (e) => this.onUp(e), opts);
+    document.addEventListener('pointercancel', (e) => this.onCancel(e), opts);
+    document.addEventListener('keydown', (e) => e.key === 'Escape' && this.cancel(), opts);
+  }
+
+  /** 원본도 세션도 없으면 리스너를 뗀다. final 이면 다시 붙지 않는다 */
+  private unlisten(final = false): void {
+    if (final) this.disposed = true;
+    if (!final && (this.entries.size || this.session)) return;
+    this.listening?.abort();
+    this.listening = undefined;
   }
 
   // ───────────────────────────── 원본 탐색 ─────────────────────────────
@@ -130,7 +208,7 @@ export class DragInController {
   private onDown(e: PointerEvent): void {
     if (this.session || (e.pointerType === 'mouse' && e.button !== 0)) return;
     const target = e.target as Element | null;
-    if (!target || !this.entries.size || this.editor.element.contains(target)) return;
+    if (!target || !this.entries.size || this.host.ignores(target)) return;
     const hit = this.find(target);
     if (!hit) return;
 
@@ -146,7 +224,6 @@ export class DragInController {
       active: false,
       snapshot: [],
       lastKey: '',
-      over: false,
       cell: { x: 0, y: 0 },
       clientX: e.clientX,
       clientY: e.clientY,
@@ -187,21 +264,21 @@ export class DragInController {
     if (!s.active) {
       if (Math.hypot(e.clientX - s.startX, e.clientY - s.startY) < DRAG_THRESHOLD) return;
       this.activate(s);
+      // 시작 알림(dragInStart) 콜백 안에서 취소되었으면 끝난 세션으로 미리보기/자동 스크롤을 이어가지 않는다
+      if (this.session !== s) return;
     }
     this.update(s);
     this.autoScroll(s);
   }
 
-  /** 포인터가 캔버스의 '보이는' 영역 위에 있는지. 컨테이너/스크롤 대상 밖으로 잘려 안 보이는 부분은 제외한다 */
-  private isOver(s: Session, canvas: DOMRect): boolean {
-    const { top, bottom } = measureScrollTarget(this.editor.getScrollElement());
-    const host = (this.editor.element.parentElement ?? this.editor.element).getBoundingClientRect();
-    return (
-      s.clientX >= canvas.left &&
-      s.clientX <= canvas.right &&
-      s.clientY >= Math.max(canvas.top, host.top, top) &&
-      s.clientY <= Math.min(canvas.bottom, host.bottom, bottom)
-    );
+  /** 포인터가 캔버스의 '보이는' 영역 위에 있는지 (canvasHit 의 공통 규칙) */
+  private isOver(s: Session, editor: DriftEditor, canvas: DOMRect): boolean {
+    return isOverCanvas(editor, s.clientX, s.clientY, canvas);
+  }
+
+  /** 포인터 아래의 대상 에디터 (canvasHit 의 공통 규칙: 겹치면 실제로 그려진 쪽, 연결 해제된 캔버스 제외) */
+  private pick(s: Session): CanvasHit | undefined {
+    return pickCanvas(this.host.targets(), s.clientX, s.clientY, s.target);
   }
 
   /** 포인터가 보이는 영역의 위/아래 가장자리에 있으면 스크롤한다 (PointerController 와 같은 규칙) */
@@ -209,12 +286,13 @@ export class DragInController {
     if (s.scrollRaf || typeof requestAnimationFrame === 'undefined') return;
     const step = () => {
       s.scrollRaf = 0;
-      if (this.session !== s || !s.active) return;
-      const canvas = this.editor.element.getBoundingClientRect();
+      const editor = s.target;
+      if (this.session !== s || !s.active || !editor) return;
+      const canvas = editor.element.getBoundingClientRect();
       // 보이는 캔버스 위에 있을 때만 (캔버스 밖의 팔레트 등에서 끌 때는 스크롤하지 않는다)
-      if (!this.isOver(s, canvas)) return;
+      if (!this.isOver(s, editor, canvas)) return;
       if (performance.now() - s.scrollAt > SCROLL_RESOLVE_MS) {
-        s.scrollEl = this.editor.getScrollElement();
+        s.scrollEl = editor.getScrollElement();
         s.scrollAt = performance.now();
       }
       const box = s.scrollEl;
@@ -244,8 +322,6 @@ export class DragInController {
   private activate(s: Session): void {
     s.active = true;
     s.input = this.resolveInput(s);
-    s.snapshot = this.editor.getItems();
-    s.baseRows = toGridPosition(0, this.editor.element.getBoundingClientRect().height, this.editor.getMetrics()).y;
 
     const rect = s.el.getBoundingClientRect();
     const ghost = s.el.cloneNode(true) as HTMLElement;
@@ -259,34 +335,47 @@ export class DragInController {
     document.body.appendChild(ghost);
     s.ghost = ghost;
 
-    this.editor.emit('dragInStart', s.el);
+    this.host.start(s.el);
+  }
+
+  /** 대상 에디터에 들어왔다: 미리보기 기준(항목 목록, 놓을 수 있는 높이)을 이 에디터 기준으로 잡는다 */
+  private enter(s: Session, editor: DriftEditor): void {
+    s.target = editor;
+    s.snapshot = editor.getItems();
+    s.baseRows = toGridPosition(0, editor.element.getBoundingClientRect().height, editor.getMetrics()).y;
+    s.lastKey = '';
+    editor.setDragInOver(true);
+  }
+
+  /** 대상 에디터를 벗어났다: 미리보기를 걷어내고 실제 모델 상태로 되돌린다 */
+  private leave(s: Session): void {
+    const editor = s.target;
+    s.target = undefined;
+    s.placed = undefined;
+    s.lastKey = '';
+    s.snapshot = [];
+    if (!editor) return;
+    editor.setDragInOver(false);
+    const placeholder = editor.getPlaceholder();
+    placeholder.hidden = true;
+    placeholder.classList.remove(CLS.placeholderInvalid);
+    editor.renderItems(editor.getItems());
   }
 
   private update(s: Session): void {
-    const editor = this.editor;
+    // 읽기(대상 판정)를 먼저 하고 쓰기(ghost 이동)를 나중에 해서 포인터 이동마다 강제 레이아웃이 반복되지 않게 한다
+    const hit = this.pick(s);
     if (s.ghost) {
       s.ghost.style.left = `${s.clientX - s.grabX}px`;
       s.ghost.style.top = `${s.clientY - s.grabY}px`;
     }
-
-    const canvas = editor.element.getBoundingClientRect();
-    const over = this.isOver(s, canvas);
-    editor.setDragInOver(over);
-
-    const placeholder = editor.getPlaceholder();
-    if (!over) {
-      if (s.over) {
-        // 캔버스를 벗어나면 미리보기를 걷어내고 원래 배치로 되돌린다
-        s.over = false;
-        s.placed = undefined;
-        s.lastKey = '';
-        placeholder.hidden = true;
-        editor.renderItems(s.snapshot);
-      }
-      return;
+    if (hit?.editor !== s.target) {
+      this.leave(s);
+      if (hit) this.enter(s, hit.editor);
     }
-    s.over = true;
+    if (!hit) return;
 
+    const { editor, canvas } = hit;
     const metrics = editor.getMetrics();
     const columns = editor.getColumns();
     const input = s.input as DriftItemInput;
@@ -325,6 +414,7 @@ export class DragInController {
     const preview = addItem(s.snapshot, columns, { ...input, id: TEMP_ID, x, y }, editor.isFloat());
     const placed = preview.find((item) => item.id === TEMP_ID) as DriftItem;
     s.placed = placed;
+    const placeholder = editor.getPlaceholder();
     placeholder.hidden = false;
     placeholder.classList.remove(CLS.placeholderInvalid);
     editor.applyRect(placeholder, placed);
@@ -343,14 +433,14 @@ export class DragInController {
       s.clientY = e.clientY;
       this.update(s);
     }
-    const { active, over, placed, input, el, entry } = s;
+    const { active, target, placed, input, el, entry } = s;
     // 콜백/추가 전에 ghost, placeholder, 밀려난 항목의 미리보기를 먼저 정리한다.
     // (이후 정리 코드가 없으므로 콜백 안에서 addItem() 을 호출해도 그 결과를 덮어쓰지 않는다)
     this.finish(s);
     if (!active) return;
 
-    if (!over || !placed || !input) {
-      this.editor.emit('dragInEnd', null);
+    if (!target || target.isDestroyed() || !placed || !input) {
+      this.host.end(null, null);
       return;
     }
 
@@ -358,27 +448,32 @@ export class DragInController {
     if (autoAdd === false) {
       // 내부 상태는 건드리지 않고 드롭 결과만 전달한다. 실제로 추가된 항목이 없으므로 dragInEnd 는 null
       try {
-        onDrop?.(this.result(el, input, placed));
+        onDrop?.(this.result(target, el, input, placed), target);
       } finally {
-        this.editor.emit('dragInEnd', null);
+        this.host.end(null, target);
       }
       return;
     }
 
     // 사용자가 끌어다 놓은 변경이므로 출처는 'user' 이다
-    const added = this.editor.addItem(
-      { ...input, id: this.uniqueId(input.id), x: placed.x, y: placed.y },
+    const added = target.addItem(
+      { ...input, id: this.uniqueId(target, input.id), x: placed.x, y: placed.y },
       { source: 'user' },
     );
     try {
-      onDrop?.(this.result(el, { ...input, id: added.id }, added));
+      onDrop?.(this.result(target, el, { ...input, id: added.id }, added), target);
     } finally {
-      this.editor.emit('dragInEnd', added);
+      this.host.end(added, target);
     }
   }
 
   /** onDrop 에 전달할 결과를 만든다. 내부 상태와 분리된 깊은 복사본이다 */
-  private result(source: HTMLElement, input: DriftItemInput, geo: DriftItem): DriftDragInDropResult {
+  private result(
+    editor: DriftEditor,
+    source: HTMLElement,
+    input: DriftItemInput,
+    geo: DriftItem,
+  ): DriftDragInDropResult {
     const item = cloneJson(input) as DriftDragInItem;
     if (!item.id) delete item.id;
     item.x = geo.x;
@@ -388,8 +483,8 @@ export class DragInController {
     return {
       source,
       item: item as DriftDragInDropResult['item'],
-      breakpoint: this.editor.getBreakpoint()?.name ?? null,
-      columns: this.editor.getColumns(),
+      breakpoint: editor.getBreakpoint()?.name ?? null,
+      columns: editor.getColumns(),
     };
   }
 
@@ -399,8 +494,9 @@ export class DragInController {
     this.cancel();
   }
 
-  private uniqueId(preferred: string): string {
-    const exists = (id: string) => this.editor.getLayout().items.some((item) => item.id === id);
+  /** 대상 에디터 안에서 겹치지 않는 id (다른 에디터의 id 와는 겹쳐도 된다) */
+  private uniqueId(editor: DriftEditor, preferred: string): string {
+    const exists = (id: string) => editor.getLayout().items.some((item) => item.id === id);
     if (preferred && !exists(preferred)) return preferred;
     let id: string;
     do id = `${preferred || 'item'}-${++this.seq}`;
@@ -418,10 +514,8 @@ export class DragInController {
       /* 이미 해제됨 */
     }
     s.ghost?.remove();
-    this.editor.setDragInOver(false);
-    this.editor.getPlaceholder().hidden = true;
-    this.editor.getPlaceholder().classList.remove(CLS.placeholderInvalid);
-    // 미리보기로 밀려 있던 항목을 실제 모델 상태로 되돌린다 (drop 이면 addItem 이 이미 반영)
-    this.editor.renderItems(this.editor.getItems());
+    // 미리보기로 밀려 있던 항목을 실제 모델 상태로 되돌린다 (drop 이면 이후 addItem 이 반영)
+    this.leave(s);
+    this.unlisten();
   }
 }

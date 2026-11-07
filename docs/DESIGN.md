@@ -26,9 +26,9 @@ index.ts = core + viewer + editor      core.ts = core      viewer.ts = core + vi
 
 | 모듈 | 책임 | DOM |
 | --- | --- | --- |
-| `core/` | 데이터 정규화/검증, 충돌, 압축(compact, 열별 색인), 이동/리사이즈/추가/삭제, 좌표 변환, 반응형 변환, 직렬화, 변경 비교(diff) | X |
+| `core/` | 데이터 정규화/검증, 충돌, 압축(compact, 열별 색인), 이동/리사이즈/추가/삭제, 좌표 변환, 반응형 변환, 직렬화, 변경 비교(diff), 여러 컨테이너 저장 포맷(`containers.ts`) | X |
 | `viewer/` | 레이아웃 → 정적 HTML + CSS 문자열 생성(SSR/빌드 타임) | X |
-| `editor/` | DOM 렌더, Drag/Resize(마우스·터치), 외부 요소 끌어오기(drag-in), 키보드, 선택, 히스토리, 이벤트 | O |
+| `editor/` | DOM 렌더, Drag/Resize(마우스·터치), 외부 요소 끌어오기(drag-in), 키보드, 선택, 히스토리, 이벤트. 여러 에디터 관리(`DriftManager`, §10) | O |
 | `event/` | 소형 Emitter | X |
 
 배포 entry: `@daracl/drift`(전체), `@daracl/drift/core`, `@daracl/drift/viewer`.
@@ -47,7 +47,7 @@ interface DriftBreakpoint { name; maxWidth; columns }
 
 * 좌표는 0 기반 정수 셀 단위. 항목의 위치/크기는 `style` 이 아니라 **data 속성**(`data-x`, `data-y`, `data-w`, `data-h`)으로 표현한다.
   * Viewer: `[data-x="3"]{grid-column-start:4}`, `[data-w="4"]{grid-column-end:span 4}`, `[data-y]`→`grid-row-start`, `[data-h]`→`grid-row-end:span`. 같은 값은 규칙을 공유하며, breakpoint 값은 `data-bp{n}-*` 속성과 `@media` 안의 같은 형태 규칙으로 덮어쓴다.
-  * Editor(GridStack 의 `gs-x` 방식): 에디터 인스턴스별(`data-ddr`) 스타일시트에 `[data-x="3"]{left:calc((100% + gap) * 3 / cols)}`, `[data-w]`→`width`, `[data-y]`→`top`, `[data-h]`→`height` 규칙을 생성한다. 생성형(adoptedStyleSheets) 스타일시트를 우선 써서 CSP 에서도 인라인 `<style>` 이 필요 없다(미지원 환경에서만 `<style>` 대체). 드래그/리사이즈 중에만 포인터를 따라가는 인라인 `left/top/width/height` 를 쓰고 끝나면 제거한다.
+  * Editor(GridStack 의 `gs-x` 방식): 설정(컬럼 수, gap, rowHeight, 행 범위)별 스타일시트(`data-ddr-geo`, 같은 설정의 에디터끼리 공유, 참조 수로 해제)에 `[data-x="3"]{left:calc((100% + gap) * 3 / cols)}`, `[data-w]`→`width`, `[data-y]`→`top`, `[data-h]`→`height` 규칙을 생성한다. 생성형(adoptedStyleSheets) 스타일시트를 우선 써서 CSP 에서도 인라인 `<style>` 이 필요 없다(미지원 환경에서만 `<style>` 대체). 드래그/리사이즈 중에만 포인터를 따라가는 인라인 `left/top/width/height` 를 쓰고 끝나면 제거한다.
 * `breakpoints` 미지정 시 기본값 `tablet(≤1024px, 8열)`, `mobile(≤640px, 4열)`. `[]` 이면 반응형 비활성.
 * JSON 직렬화는 이 구조 그대로이며 Editor/Viewer 가 같은 모델을 쓴다.
 
@@ -83,9 +83,9 @@ interface DriftBreakpoint { name; maxWidth; columns }
   * `dragMode: 'auto'`(기본): 마우스/펜은 카드 전체, 터치는 핸들에서만 드래그.
 * 3px 이동 임계값 전에는 클릭(선택)으로 취급. `Esc`/`pointercancel` 로 취소하면 원위치.
 * 드래그 중 모델은 변경하지 않고 snapshot 기준으로 미리보기만 계산(셀이 바뀔 때만 재계산) → drop 시 1회 커밋.
-* 화면 가장자리에서 자동 스크롤. 코어스 포인터에서 핸들/리사이즈 대상 최소 크기 44px.
+* 화면 가장자리에서 자동 스크롤. 코어스 포인터에서 핸들/리사이즈 대상 최소 크기 44px. 모서리 핸들(se/sw)은 모서리에서 44px, 변 가운데 핸들(e/w/s)은 핸들 중심 기준으로 **변을 따라 44px, 안쪽으로 28px** 만 넓힌다(안쪽으로 44px 를 넓히면 작은 카드의 본문 중앙·이웃 카드의 드래그 핸들을 덮어 본문 스크롤/핸들 드래그가 리사이즈로 바뀐다. e2e TCH-05 가 히트 테스트로 검사).
 * 리사이즈 핸들은 카드 우하단(`se`: 오른쪽/아래로 조절)과 좌하단(`sw`: 왼쪽/아래로 조절, 오른쪽 가장자리 고정하고 `x`/`w` 가 함께 바뀜) 두 곳이다(`resizeHandles` 옵션). `sw` 의 무효 표시(locked 충돌)는 거부 후의 결과가 아니라 요청한 크기로 판정한다.
-* **외부 drag-in(`setupDragIn`)**: 에디터 밖 요소(팔레트 등)를 끌어다 캔버스에 놓아 추가한다. 별도 `DragInController` 가 document 단위 Pointer 리스너로 처리하며 원본은 그대로 두고 복제본(ghost)이 따라간다. 미리보기는 임시 id 로 `addItem` 을 계산해 placeholder 와 기존 항목의 비켜가는 모습만 보여주고(모델 불변), 놓는 순간 최종 위치/크기를 한 번 더 확정한다.
+* **외부 drag-in(`setupDragIn`)**: 에디터 밖 요소(팔레트 등)를 끌어다 캔버스에 놓아 추가한다. 별도 `DragInController` 가 document 단위 Pointer 리스너(원본이 등록되어 있거나 세션 중일 때만 부착)로 처리하며 원본은 그대로 두고 복제본(ghost)이 따라간다. 미리보기는 임시 id 로 `addItem` 을 계산해 placeholder 와 기존 항목의 비켜가는 모습만 보여주고(모델 불변), 놓는 순간 최종 위치/크기를 한 번 더 확정한다.
   * 기본(`autoAdd:true`): 정리 후 `editor.addItem()` 한 번 → `add`/`layoutChange` 1회, undo 1단계.
   * `autoAdd:false`: 외부 모델이 상태를 관리하는 환경용. 정리(ghost, placeholder, 밀린 항목 복원) 후 `onDrop` 으로 최종 위치·크기(복사본)만 전달하고 레이아웃/선택/이력/dirty/이벤트는 건드리지 않는다. 정리가 콜백보다 먼저이므로 콜백 안의 동기 `addItem()` 이 안전하다. `dragInEnd` 는 항상 `null`(추가된 항목 없음)이고 정상 드롭은 `onDrop` 으로 구분한다.
 * 키보드: 방향키 이동, Shift+방향키 리사이즈(오른쪽/아래 기준), Delete 삭제, Esc 선택 해제.
@@ -125,7 +125,47 @@ interface DriftBreakpoint { name; maxWidth; columns }
 ## 9. 알려진 제약
 
 * 세로 방향만 지원한다(기본 중력 압축, 옵션 `float`). 가로 중력은 없음.
-* 레이아웃 중첩(nested grid)은 범위 밖. 그리드 간(에디터 ↔ 에디터) 항목 이동도 지원하지 않는다. 외부 요소 → 에디터 drag-in 은 `setupDragIn` 으로 지원한다(§7).
+* 레이아웃 중첩(nested grid)은 범위 밖. 그리드 간(에디터 ↔ 에디터) 항목 이동은 같은 `DriftManager` 안에서만 지원한다(§11). 단일 항목만(복제·다중 선택·다른 Manager 간 이동 없음). 외부 요소 → 에디터 drag-in 은 `setupDragIn` 으로, 하나의 팔레트 → 여러 에디터는 `DriftManager.setupDragIn` 으로 지원한다(§7, §10).
 * drag-in 중 화면 가장자리 자동 스크롤은 없다(캔버스가 화면에 보이는 상태에서 놓아야 한다). 동적으로 추가된 원본에 터치 스크롤 방지(`touch-action: none`)는 `setupDragIn` 호출 시점의 요소에만 자동 적용된다.
 * 리사이즈 핸들은 우하단(`se`)과 좌하단(`sw`) 두 곳이다. 위쪽/오른쪽·왼쪽 가장자리 단독 핸들(n, e, w, ne, nw)은 없다. 키보드 리사이즈는 오른쪽/아래 기준(Shift+방향키)만 있고 왼쪽 기준은 없다.
 * Viewer 의 행 높이는 고정(`rowHeight` px). 콘텐츠가 넘치면 항목 내부 스크롤(`overflow:auto`).
+
+## 10. 여러 컨테이너 (DriftManager)
+
+사용법은 [MULTI_CONTAINER.md](MULTI_CONTAINER.md). 여기서는 구조와 결정만 적는다.
+
+| 구성 | 위치 | 설계 |
+| --- | --- | --- |
+| 등록 | `editor/DriftManager.ts` | `Map<id, Entry>`(등록 순서 유지) + 에디터 → Entry 역참조. 요소 중복은 모듈 수준 `WeakMap<요소, 에디터>`(`getEditorOf`)로 Manager 경계를 넘어 막는다. 생성자가 렌더링 중 실패해도 이 맵으로 찾아 destroy 한다 |
+| 소유권 | 〃 | Manager 가 만든 에디터를 소유하고 `unregister/destroy` 에서 destroy 한다. 컨테이너 요소는 지우지 않는다. 에디터의 새 `destroy` 이벤트로 직접 destroy 를 감지해 등록을 정리한다 |
+| 활성 | 〃 | 컨테이너의 `pointerdown`/`focusin`(capture, AbortController) + 드롭. 키보드는 원래 캔버스 단위라 Manager 가 전역 키 처리를 추가하지 않는다 |
+| 공통 끌어오기 | `editor/DragInController.ts` | 단일 에디터용 컨트롤러를 **복제하지 않고 일반화**했다. 컨트롤러는 `DragInHost`(대상 목록, 무시할 영역, 시작/종료 알림)만 알고, 세션이 "현재 대상" 하나를 가진다. 대상이 바뀌면 `leave`(미리보기 원복) → `enter`(새 대상의 snapshot/높이 기준). 단일 에디터는 대상이 자기 하나인 host, Manager 는 등록된 에디터 목록 host 를 넘긴다. drop/정리 순서(정리 → 콜백 → 종료 이벤트)는 그대로다 |
+| 이벤트 | `DriftManager` | 등록/해제/활성/끌어오기 이벤트는 Manager 가 낸다. `layoutChange` 는 에디터 이벤트를 `containerId` 와 함께 그대로 전달하며, Manager 에 리스너가 있을 때만 에디터를 구독한다 |
+| 저장 | `core/containers.ts` | `{ version, containers: [{ id, layout }] }`. 검증(`parseContainerData`)은 core 순수 함수라 Viewer/서버에서도 쓸 수 있다. 복원은 전체 검증 → 이전 상태 보관 → 컨테이너별 `load()` → 실패 시 되돌림 |
+
+결정과 한계
+
+* 미등록 컨테이너는 자동 생성하지 않는다(DOM 을 데이터로 알 수 없다). 필요해지면 `fromJSON` 에 resolver 옵션을 추가하는 방식으로 확장한다.
+* 복원 실패 시 되돌린 에디터의 undo 이력은 비워진다(`load()` 의미). 완전한 원자성은 보장하지 않는다.
+* 컨테이너 간 항목 이동은 §11.
+
+## 11. 컨테이너 간 이동
+
+사용 규칙과 정책은 [MULTI_CONTAINER.md §10](MULTI_CONTAINER.md). 여기서는 구조만 적는다.
+
+| 구성 | 위치 | 설계 |
+| --- | --- | --- |
+| 계산 | `core/transfer.ts` `planTransfer` | 순수 함수. 원본은 에디터 `removeItem`, 대상은 `addItem` 과 같은 규칙(현재 breakpoint, float, 압축)으로 두 레이아웃을 만들고 거절 사유(missing-item/locked/id-conflict/invalid-size/blocked)를 돌려준다. 포인터 미리보기와 API 가 같은 함수를 쓴다 |
+| 트랜잭션 | `DriftManager.runTransfer` + 에디터 `tx*` 내부 메서드 | ① 계산·검증 ② `txBegin`(모델·선택·이력 스냅샷) ③ `txApply`(이벤트/이력 없이 반영·렌더) ④ 콘텐츠 훅 예외면 두 쪽 `txRollback` ⑤ `txRecord`(연결 기록 또는 이력 비움) ⑥ `txNotify`(layoutChange+transactionId, add/remove) → 활성/선택 → `itemTransfer`. Manager 는 에디터의 private 상태를 직접 다루지 않는다. 처리 중 재진입은 `busy` |
+| 연결 이력 | `History` 항목의 `link`, `TransferLink` | 두 에디터 스택에 같은 link 객체를 쌓는다. 에디터의 `undo/redo/canUndo/canRedo` 는 맨 위 항목에 link 가 있으면 link 에 위임하고, link 는 양쪽 맨 위가 자신일 때만 실행한다. 한쪽에서 link 가 버려지면(push 의 redo 삭제, 제한 초과 shift, clear) `drop()` → 양쪽 `cut()`: undo 스택은 link 이하, redo 스택은 link 이하(더 먼 미래)를 버린다. 트랜잭션 롤백은 `export/restore` 로 스택을 그대로 되돌린다(무효화 없음) |
+| 포인터 | `PointerController` + `TransferController`(Manager 소유, `PointerTransferHost`) | 원본의 기존 드래그 세션이 그대로 진행되고, 드래그 `update` 가 host 에 위치를 묻는다(`source`/`away`/`cancel`). away 면 원본은 원위치 미리보기로 돌아가고 host 가 ghost·대상 placeholder·미리보기를 맡는다. drop 은 원본 정리(`finish` → `host.end`) 뒤 `host.drop` 이 Manager 트랜잭션으로 커밋한다. 대상 판정은 `canvasHit`(외부 끌어오기와 공유). 세션 동안 원본·대상 캔버스 높이를 고정해(`lockHeight`) 다른 컨테이너가 포인터 아래에서 움직이지 않게 한다 |
+| stale | 에디터 `revision` | 모델 교체·load·breakpoint 변경마다 증가. 포인터 세션은 시작/대상 진입 시 값을 기록해 바뀌면 취소하고, 커밋 시에도 다시 비교한다 |
+
+결정과 한계
+
+* 단순한 `removeItem` + `addItem` 연속 호출을 쓰지 않는다(중간 이벤트·undo 로 항목이 복제·소실될 수 있다).
+* 롤백은 모델·선택·이력·DOM 을 되돌리지만 콘텐츠 훅의 외부 부수효과까지 되돌린다고 보장하지 않는다.
+* history:false 가 한쪽에 있으면 두 이력을 모두 비운다(연결할 수 없는 이동을 가로지르는 undo 를 막는 보수적 정책).
+* 연결 기록 무효화는 두 겹으로 막는다: link 가 실행 시 양쪽 맨 위·등록 상태를 다시 확인하고, 사라진 기록은 상대 스택에서 절단한다.
+* 이동 모드 동안 캔버스 높이를 고정하므로 미리보기로 밀려난 항목이 잠시 캔버스 아래로 넘쳐 보일 수 있다.
+* 한 원본을 Manager 와 에디터에 동시에 등록하면 두 컨트롤러가 같은 끌기를 처리한다. 한쪽에만 등록한다(문서화).

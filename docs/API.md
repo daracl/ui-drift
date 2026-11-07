@@ -56,14 +56,50 @@
 | `setGrid(bool)` / `isGrid()` | 배경 모눈종이 격자 표시 전환 |
 | `refresh()` | 컨테이너 크기 재측정 |
 | `on` / `once` / `off` | `on` 은 해제 함수를 반환 |
-| `destroy()` | 리스너, ResizeObserver, 예약된 크기 알림, 콘텐츠(unmount), DOM 해제 |
+| `destroy()` / `isDestroyed()` | 리스너, ResizeObserver, 예약된 크기 알림, 콘텐츠(unmount), DOM 해제. 시작할 때 `destroy` 이벤트 발생 |
 
 ### 이벤트
 
-`layoutChange(layout, {reason, source, changes})`, `sizeChange(changes)`, `add`, `remove`, `select`, `dragStart`, `dragEnd`, `resizeStart`, `resizeEnd`, `breakpointChange`, `save`, `dragInStart(source)`, `dragInEnd(item|null)` (`autoAdd:false` 에서는 항상 `null`, 위 "onDrop 과 autoAdd:false" 참고).
+`layoutChange(layout, {reason, source, changes})`, `sizeChange(changes)`, `add`, `remove`, `select`, `dragStart`, `dragEnd`, `resizeStart`, `resizeEnd`, `breakpointChange`, `save`, `destroy()`(해제 시작 시 한 번), `dragInStart(source)`, `dragInEnd(item|null)` (`autoAdd:false` 에서는 항상 `null`, 위 "onDrop 과 autoAdd:false" 참고).
 `reason`: `init | load | add | remove | update | move | resize | drag | clear | reset | undo | redo | sync`.
-`layoutChange` 의 첫 인자(레이아웃 복사본)와 `info.reason` 은 기존과 같고, `info.source` 와 `info.changes` 가 추가되었다 (아래 "외부 모델 연동").
+`layoutChange` 의 첫 인자(레이아웃 복사본)와 `info.reason` 은 기존과 같고, `info.source` 와 `info.changes` 가 추가되었다 (아래 "외부 모델 연동"). 컨테이너 간 이동과 그 연결 undo/redo 로 생긴 변경에는 `info.transactionId` 가 있다(원본은 `remove`, 대상은 `add`, 되돌리기는 `undo`/`redo`).
 변경이 없는 연산은 이벤트/히스토리를 만들지 않는다. 드래그 중에는 모델이 바뀌지 않고 drop 시 한 번만 `layoutChange`.
+
+## createDriftManager(options?) → DriftManager (여러 컨테이너)
+
+하나의 페이지에서 여러 개의 독립된 `DriftEditor` 를 등록·관리한다. 각 에디터의 기능(편집, 이력, 선택, breakpoint, 콘텐츠 수명, 이벤트)은 그대로이며 Manager 는 등록/해제, 활성 컨테이너, 공통 팔레트 끌어오기, 이벤트 집계, 전체 저장·복원만 맡는다. 사용법과 정책은 [MULTI_CONTAINER.md](MULTI_CONTAINER.md).
+
+### DriftManager
+
+| 메서드 | 설명 |
+| --- | --- |
+| `register(id, container, options?)` → DriftEditor | 컨테이너(요소 또는 selector)에 에디터를 만들어 등록. 빈/중복 id, 찾을 수 없는 요소, 이미 에디터가 있는 요소(다른 Manager 포함)는 예외. 생성 중 실패하면 정리하고 등록하지 않는다 |
+| `unregister(id)` → boolean | 등록 해제 + 에디터 destroy (컨테이너 요소는 남는다). 없는 id 는 false |
+| `get(id)` / `has(id)` / `getIds()` / `getAll()` / `getIdOf(editor)` | 조회 (등록 순서) |
+| `setActive(id|null)` / `getActiveId()` / `getActiveEditor()` | 활성 컨테이너. 컨테이너를 누르거나 포커스가 들어오면, 공통 팔레트로 드롭하면 자동으로 바뀐다. 없는 id 는 예외 |
+| `setupDragIn(source, options?)` → dispose | 공통 팔레트. 포인터 아래의 컨테이너 하나에만 추가. `onDrop(result)` 의 result 에 `containerId`, `editor` 가 더해진다 |
+| `cancelDragIn()` | 진행 중인 공통 팔레트 끌기 취소 |
+| `setCrossContainerDrag(bool)` / `isCrossContainerDrag()` | 컨테이너 간 **포인터** 이동 켜기/끄기(옵션 `crossContainerDrag`, 기본 false). 끄면 진행 중인 이동 세션은 `disabled` 로 취소 |
+| `transferItem({ from, to, itemId, x?, y?, newId? }, { source? })` → 결과 | 항목을 다른 컨테이너로 옮긴다(옵션과 무관). 성공 `{ moved: true, transactionId, from, to, item }`, 거절 `{ moved: false, reason }`. x/y 는 둘 다 생략(자동 배치) 또는 둘 다 지정(대상의 현재 편집 breakpoint 셀). 같은 컨테이너는 `same-container`(editor.moveItem 사용) |
+| `getLayouts()` / `toJSON(space?)` | `{ version: 1, containers: [{ id, layout }] }` (등록 순서, 복사본) |
+| `fromJSON(json|data, { unknown?, source?, emit? })` → string[] | 등록된 컨테이너에 복원(부분 갱신). 전체 검증 후 적용, 도중 실패 시 되돌림. `unknown:'error'`(기본)/`'ignore'` |
+| `on` / `once` / `off` | Manager 이벤트 |
+| `destroy()` / `isDestroyed()` | 모든 컨테이너와 공통 팔레트 해제. 두 번 호출해도 안전 |
+
+### Manager 이벤트
+
+| 이벤트 | 인자 |
+| --- | --- |
+| `containerRegistered` | `{ containerId, editor }` |
+| `containerUnregistered` | `{ containerId }` (에디터는 이미 destroy 됨. 에디터를 직접 destroy 해도 발생) |
+| `activeChange` | `{ containerId, previousId, editor }` (없으면 null) |
+| `layoutChange` | `{ containerId, editor, layout, info }` — 에디터의 `layoutChange` 와 같은 데이터(reason/source/changes) |
+| `dragInStart` | `{ source }` |
+| `dragInEnd` | `{ containerId, item }` — 취소/밖이면 둘 다 null, `autoAdd:false` 정상 드롭은 item 만 null |
+| `itemTransfer` | `{ transactionId, action, from, to, beforeItem, afterItem, source }` — 컨테이너 간 이동(`transfer`)과 연결 `undo`/`redo` 마다 한 번. API 변경은 두 에디터 중 하나라도 `programmaticEvents:false` 면 억제 |
+| `transferReject` | `{ reason, from, to, itemId }` — 포인터로 놓은 이동의 거절, 진행 중 세션의 `stale`/`disabled` 취소 (API 거절은 결과 객체로만) |
+
+에디터 개별 이벤트(`select`, `sizeChange` 등)는 `manager.get(id).on(...)` 으로 직접 구독한다. Manager 의 `layoutChange` 는 Manager 에 리스너가 있을 때만 에디터를 구독한다.
 
 ## Viewer — `@daracl/drift/viewer`
 
@@ -72,7 +108,7 @@
 | `renderViewer(layout, {scope?, renderContent?})` → `{html, css, scope}` | 입력은 객체/JSON, `parseLayout` 으로 검증·보정 |
 | `renderViewerPage(layout, {title?, lang?, cssHref?, nonce?, scope?, renderContent?})` → string | viewport meta 포함, 스크립트 없음 |
 
-`scope` 는 `^[a-z][a-z0-9-]*$` 만 허용 (아니면 예외).
+`scope` 는 `^[a-z][a-z0-9-]*$` 만 허용 (아니면 예외). 한 페이지에 여러 레이아웃을 출력할 때는 레이아웃마다 다른 `scope` 를 준다(같은 scope 면 `grid-template-columns` 등 규칙이 겹친다).
 
 ## Core — `@daracl/drift/core` (순수 함수, 불변)
 
@@ -85,6 +121,7 @@
 | 잠금 판정 | `isMovable`, `isResizable` |
 | 좌표 | `createMetrics`, `toPixelRect`, `toGridPosition`, `toGridSize`, `getRowCount` |
 | 반응형 | `getBreakpoints`, `matchBreakpoint`, `deriveItems`, `resolveItems`, `applyItems` |
+| 여러 컨테이너 | `parseContainerData`, `serializeContainerData`, `assertContainerId` (DriftManager 저장 포맷, DOM 없음), `planTransfer` (컨테이너 간 이동 결과 계산·검증, 순수 함수) |
 
 연산 함수(`addItem/removeItem/moveItem/resizeItem/updateItem/normalizeItems/deriveItems/compact`)는 마지막 선택 인자 `float` 를 받는다. `(items, columns, ...)` 형태로 항목 배열을 받아 새 배열을 반환한다. 같은 입력은 항상 같은 결과를 낸다.
 

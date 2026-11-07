@@ -6,6 +6,8 @@ export const CLS = {
   dragInSource: 'ddr-dragin-source',
   dragInGhost: 'ddr-dragin-ghost',
   dragInOver: 'ddr-dragin-over',
+  transferGhost: 'ddr-transfer-ghost',
+  transferSource: 'ddr-transfer-source',
   item: 'ddr-item',
   handle: 'ddr-handle',
   handleEmpty: 'ddr-handle-empty',

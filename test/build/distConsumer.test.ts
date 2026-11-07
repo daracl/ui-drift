@@ -40,9 +40,26 @@ run('dist: 외부 프로젝트에서의 사용 (Node)', () => {
 
   it('index 진입점은 editor 와 viewer 를 모두 export 한다', () => {
     const out = node(
-      `const m = require('./dist/index.cjs'); console.log(JSON.stringify(['createDriftEditor','DriftEditor','renderViewer','renderViewerPage','createLayout'].map(k => typeof m[k])));`,
+      `const m = require('./dist/index.cjs'); console.log(JSON.stringify(['createDriftEditor','DriftEditor','renderViewer','renderViewerPage','createLayout','createDriftManager','DriftManager','parseContainerData'].map(k => typeof m[k])));`,
     );
-    expect(JSON.parse(out)).toEqual(['function', 'function', 'function', 'function', 'function']);
+    expect(JSON.parse(out)).toEqual(Array(8).fill('function'));
+  });
+
+  it('ESM index 는 DriftManager 를, core/viewer 는 DOM 없이 컨테이너 저장 포맷을 제공한다', () => {
+    const out = node(
+      `import * as m from './dist/index.js'; import * as c from './dist/core.js'; import * as v from './dist/viewer.js';
+       const data = c.parseContainerData({ version: 1, containers: [{ id: 'h', layout: ${sample} }] });
+       console.log(JSON.stringify({ manager: typeof m.createDriftManager, cls: typeof m.DriftManager,
+         ids: data.containers.map(x => x.id), viewer: typeof v.serializeContainerData, coreManager: typeof c.createDriftManager }));`,
+      true,
+    );
+    expect(JSON.parse(out)).toEqual({
+      manager: 'function',
+      cls: 'function',
+      ids: ['h'],
+      viewer: 'function',
+      coreManager: 'undefined',
+    });
   });
 
   it('package.json exports 가 가리키는 파일이 모두 존재한다', () => {
@@ -72,6 +89,12 @@ run('dist: 외부 프로젝트에서의 사용 (Node)', () => {
     runInNewContext(code, { window });
     expect(window.Daracl.drift.createLayout().version).toBe(1);
     expect(typeof window.Daracl.drift.renderViewer).toBe('function');
+    const drift = window.Daracl.drift as unknown as Record<string, unknown>;
+    expect(['createDriftManager', 'DriftManager', 'parseContainerData'].map((k) => typeof drift[k])).toEqual([
+      'function',
+      'function',
+      'function',
+    ]);
     expect(code.includes('Licensed MIT')).toBe(true);
   });
 
@@ -111,6 +134,32 @@ describe('문서(docs/API.md)와 구현의 일치', () => {
     expect(missing).toEqual([]);
   });
 
+  it('DriftManager 표의 모든 메서드가 실제 인스턴스에 존재한다', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { DriftManager } = require('@/editor');
+    const methods = names(section('### DriftManager\n', '### Manager 이벤트')).filter((n) => /^[a-z]/.test(n));
+    expect(methods.length).toBeGreaterThan(15);
+    expect(methods.filter((m) => typeof DriftManager.prototype[m] !== 'function')).toEqual([]);
+  });
+
+  it('문서화된 Manager 이벤트 이름이 타입 정의에 존재한다', () => {
+    const src = fs.readFileSync(path.join(root, 'src/drift/editor/DriftManager.ts'), 'utf8');
+    const events = names(section('### Manager 이벤트', '\n## ')).filter((n) => /^[a-z]/.test(n));
+    expect(events.sort()).toEqual(
+      [
+        'activeChange',
+        'containerRegistered',
+        'containerUnregistered',
+        'dragInEnd',
+        'dragInStart',
+        'itemTransfer',
+        'layoutChange',
+        'transferReject',
+      ].sort(),
+    );
+    events.forEach((e) => expect(src).toMatch(new RegExp(`\\b${e}:`)));
+  });
+
   it('Core/Viewer 표의 모든 함수가 실제로 export 된다', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const lib = require('@/index');
@@ -134,6 +183,7 @@ describe('문서(docs/API.md)와 구현의 일치', () => {
       'resizeEnd',
       'breakpointChange',
       'save',
+      'destroy',
     ];
     events.forEach((e) => {
       expect(doc).toContain(e);

@@ -187,6 +187,11 @@ export interface DriftChangeInfo {
    * 사용자가 움직인 항목뿐 아니라 충돌로 밀려난 항목도 changed 에 포함된다.
    */
   changes: DriftChanges;
+  /**
+   * 컨테이너 간 이동(DriftManager.transferItem, 포인터 이동)과 그 연결 undo/redo 로 생긴 변경이면 그 작업의 id.
+   * 원본/대상 두 에디터의 layoutChange 와 Manager 의 itemTransfer 를 연관시키는 데 쓴다. 일반 변경에는 없다.
+   */
+  transactionId?: string;
 }
 
 /** 콘텐츠 생명주기 훅. item 은 내부 상태와 분리된 복사본이다 */
@@ -285,6 +290,11 @@ export interface DriftEditorEvents {
    * 위치 이동만 한 항목은 포함되지 않는다. 호스트가 외부 위젯의 resize() 를 호출하는 데 쓴다.
    */
   sizeChange: (changes: DriftSizeChange[]) => void;
+  /**
+   * `destroy()` 가 시작될 때 한 번 발생한다 (리스너/DOM 을 해제하기 전). 이 이벤트 뒤에는 모든 리스너가 제거된다.
+   * DriftManager 는 이 이벤트로 직접 destroy 된 에디터의 등록을 정리한다.
+   */
+  destroy: () => void;
 }
 
 /** `getItemState()` 가 돌려주는 항목의 잠금/크기조절 상태 (위치 고정과 크기 조절은 독립) */

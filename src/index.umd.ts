@@ -1,5 +1,5 @@
 import * as core from './core';
-import { createDriftEditor, DriftEditor } from './editor';
+import { createDriftEditor, createDriftManager, DriftEditor, DriftManager } from './editor';
 import { renderViewer, renderViewerPage } from './viewer';
 
 // 브라우저 전역에 등록 (window.Daracl.drift)
@@ -11,5 +11,13 @@ declare global {
 
 if (typeof window !== 'undefined') {
   window.Daracl = window.Daracl || {};
-  window.Daracl.drift = { ...core, createDriftEditor, DriftEditor, renderViewer, renderViewerPage };
+  window.Daracl.drift = {
+    ...core,
+    createDriftEditor,
+    DriftEditor,
+    createDriftManager,
+    DriftManager,
+    renderViewer,
+    renderViewerPage,
+  };
 }

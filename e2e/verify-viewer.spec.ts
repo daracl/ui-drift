@@ -151,7 +151,13 @@ test.describe('[VWR] Viewer: JavaScript 비실행 증거', () => {
     await page.goto('http://example.test/viewer.html');
     const a = await box(page, '[data-drift-id="a"]');
     const c = await box(page, '[data-drift-id="c"]');
-    expect(a.width).toBeGreaterThan(300);
+    // 기대 폭은 고정값이 아니라 example/layout.json(열 수, gap, 항목 a 의 w)과 실제 그리드 폭으로 계산한다
+    // (샘플이 12열 → 24열로 바뀌어 예전 고정값 300px 이 맞지 않게 되었다)
+    const layout = JSON.parse(fs.readFileSync(path.join(dir, 'layout.json'), 'utf8'));
+    const itemA = layout.items.find((i: { id: string }) => i.id === 'a');
+    const grid = await box(page, '.ddr-viewer');
+    const gap = layout.gap ?? 8;
+    expect(a.width).toBeCloseTo(((grid.width + gap) * itemA.w) / layout.columns - gap, 0);
     expect(c.x).toBeGreaterThan(a.x + a.width);
     await context.close();
   });

@@ -1,4 +1,7 @@
 export { compact } from './drift/core/compact';
+export { assertContainerId, parseContainerData, serializeContainerData } from './drift/core/containers';
+export { planTransfer } from './drift/core/transfer';
+export type { DriftTransferPlan, DriftTransferPlanInput, DriftTransferPlanReject } from './drift/core/transfer';
 export { diffItems, itemsEqual, layoutsEqual } from './drift/core/diff';
 export { isMovable, isResizable } from './drift/core/flags';
 export {
@@ -17,7 +20,14 @@ export {
   toGridSize,
   toPixelRect,
 } from './drift/core/geometry';
-export { cloneLayout, createLayout, parseLayout, sanitizeItem, serializeLayout, validateLayout } from './drift/core/layout';
+export {
+  cloneLayout,
+  createLayout,
+  parseLayout,
+  sanitizeItem,
+  serializeLayout,
+  validateLayout,
+} from './drift/core/layout';
 export {
   addItem,
   findFreePosition,
@@ -31,6 +41,7 @@ export {
 export type { DriftItemInput } from './drift/core/operations';
 export { applyItems, deriveItems, getBreakpoints, matchBreakpoint, resolveItems } from './drift/core/responsive';
 export {
+  CONTAINER_DATA_VERSION,
   DEFAULT_BREAKPOINTS,
   DEFAULT_COLUMNS,
   DEFAULT_GAP,
@@ -41,6 +52,8 @@ export {
 export type {
   DriftBreakpoint,
   DriftChanges,
+  DriftContainerData,
+  DriftContainerLayout,
   DriftGeometry,
   DriftItem,
   DriftItemChange,

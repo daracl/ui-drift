@@ -101,3 +101,17 @@ export interface DriftRect {
   width: number;
   height: number;
 }
+
+/** 여러 컨테이너의 레이아웃을 묶은 저장 데이터 안의 컨테이너 하나 (DriftManager) */
+export interface DriftContainerLayout {
+  /** 컨테이너 id (항목 id 와 별개. 서로 다른 컨테이너는 같은 항목 id 를 써도 된다) */
+  id: string;
+  layout: DriftLayout;
+}
+
+/** 여러 컨테이너의 레이아웃 저장 포맷. 각 layout 은 단일 에디터의 DriftLayout 과 같다 */
+export interface DriftContainerData {
+  version: 1;
+  /** 저장 순서 = 등록 순서 */
+  containers: DriftContainerLayout[];
+}

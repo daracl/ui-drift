@@ -94,6 +94,28 @@ createDriftEditor(gridEl, { scrollContainer: '.drs-canvas' });
 
 반응형 편집: `editor.setBreakpoint('mobile')` 로 해당 breakpoint 를 편집하면 `item.responsive.mobile` 에만 저장된다. `'auto'` 는 컨테이너 폭으로 선택(옵션 `responsive: true` 와 같음), `null`(기본)은 폭이 바뀌어도 기본 레이아웃을 유지한다.
 
+## 여러 컨테이너 (DriftManager)
+
+한 페이지의 여러 영역(header/body/footer 등)을 각각 독립된 에디터로 두고 하나의 관리자로 다룬다. 각 에디터의 기능은 그대로이고, Manager 는 등록/해제, 활성 컨테이너, 공통 팔레트 끌어오기, 이벤트 집계, 전체 저장·복원을 맡는다. 자세한 정책은 [docs/MULTI_CONTAINER.md](docs/MULTI_CONTAINER.md).
+
+```ts
+import { createDriftManager } from '@daracl/drift';
+
+const manager = createDriftManager();
+manager.register('header', '#header', { columns: 12 });
+manager.register('body', '#body', { columns: 6 });
+
+manager.setupDragIn('.palette .item');                       // 포인터 아래의 컨테이너 하나에만 추가
+manager.on('layoutChange', ({ containerId, layout }) => save(containerId, layout));
+manager.getActiveEditor()?.undo();                           // 마지막으로 조작한 컨테이너
+
+const json = manager.toJSON();                               // { version: 1, containers: [{ id, layout }] }
+manager.fromJSON(json);                                      // 등록된 컨테이너에 복원 (전체 검증 후 적용)
+manager.destroy();
+```
+
+컨테이너 간 항목 이동: `createDriftManager({ crossContainerDrag: true })` 로 마우스·터치 이동을 켜고(기본 꺼짐), API 는 `manager.transferItem({ from, to, itemId, x?, y?, newId? })` 이다. 두 컨테이너의 변경은 한 트랜잭션으로 반영되고 어느 쪽 `undo()` 든 함께 되돌린다. 규칙은 [docs/MULTI_CONTAINER.md §10](docs/MULTI_CONTAINER.md).
+
 ## Viewer (JavaScript 없음)
 
 ```ts

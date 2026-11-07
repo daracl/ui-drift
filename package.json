@@ -1,6 +1,6 @@
 {
   "name": "@daracl/drift",
-  "version": "0.0.4",
+  "version": "0.0.7",
   "description": "Daracl Drift - drag & drop layout editor with a CSS-only viewer",
   "author": {
     "name": "daracl",
@@ -101,6 +101,6 @@
     "audit:security:all": "npm audit"
   },
   "dependencies": {
-    "@daracl/core": "0.0.13"
+    "@daracl/core": "^0.0.14"
   }
 }

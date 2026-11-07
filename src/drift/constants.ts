@@ -2,6 +2,9 @@ import { DriftBreakpoint } from '@t/DriftLayout';
 
 export const LAYOUT_VERSION = 1;
 
+/** 여러 컨테이너의 레이아웃 묶음(DriftContainerData) 저장 포맷 version */
+export const CONTAINER_DATA_VERSION = 1;
+
 export const DEFAULT_COLUMNS = 12;
 export const DEFAULT_ROW_HEIGHT = 40;
 export const DEFAULT_GAP = 8;

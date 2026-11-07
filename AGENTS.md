@@ -50,8 +50,11 @@ ui-drift/
 │  │   └─ editor/      DOM 편집기
 │  │       ├─ DriftEditor.ts        퍼사드. 모델·렌더·이벤트·히스토리
 │  │       ├─ PointerController.ts  드래그/리사이즈/키보드/클릭
-│  │       ├─ DragInController.ts   외부 요소를 끌어와 추가 (setupDragIn)
-│  │       ├─ GeometryStyle.ts      data-x/y/w/h 위치 CSS 규칙 생성기
+│  │       ├─ DragInController.ts   외부 요소를 끌어와 추가 (setupDragIn). 대상 목록(DragInHost)을 받아 단일 에디터/Manager 가 공유
+│       ├─ DriftManager.ts       여러 에디터 등록·활성·공통 끌어오기·이벤트 집계·전체 저장/복원·컨테이너 간 이동 트랜잭션과 연결 이력 (docs/MULTI_CONTAINER.md)
+│       ├─ TransferController.ts 컨테이너 간 포인터 이동(대상 판정, ghost, 대상 미리보기). PointerController 의 host
+│       ├─ canvasHit.ts          포인터 아래의 보이는 캔버스 판정 (DragIn 과 이동이 공유)
+│  │       ├─ GeometryStyle.ts      data-x/y/w/h 위치 CSS 규칙 생성기 (같은 설정의 에디터끼리 시트 공유, data-ddr-geo)
 │  │       ├─ History.ts            undo/redo 스택
 │  │       └─ classNames.ts         CSS 클래스 상수 (style/_editor.scss 와 일치)
 │  └─ sortable/    Sortable 본체 (Drift 를 import 하지 않는다). types.d.ts 는 @/sortable/types
@@ -97,6 +100,7 @@ types → core → viewer
 - 모델 변경은 항상 `DriftEditor.commit()` 을 거친다(히스토리, 이벤트, 렌더). 변화가 없으면 이벤트/히스토리를 만들지 않는다.
 - 드래그/리사이즈 중에는 모델을 바꾸지 않고, 시작 시점 snapshot 기준으로 미리보기를 계산하여 셀이 바뀔 때만 재계산한다. drop 시 한 번 커밋한다(Esc/pointercancel 은 원복).
 - 리사이즈 핸들은 `data-dir` 로 방향을 구분한다(`se` 우하단, `sw` 좌하단, `e`/`w`/`s` 동·서·남 변 가운데, 옵션 `resizeHandles`; `w` 는 `sw` 처럼 왼쪽 가장자리를 움직여 locked 에 쓸 수 없다). `sw` 는 오른쪽 가장자리를 고정하고 `x`/`w` 를 함께 바꾸며 core 의 `resizeItemFromLeft` 를 쓴다. 무효(locked 충돌) 표시는 결과가 아니라 '요청한' 크기로 판정한다(거부되면 결과가 원래 크기로 돌아가므로).
+- 터치 기기의 확장 터치 영역(`style/_editor.scss` 의 `@media (pointer: coarse)`)은 카드 본문 중앙과 드래그 핸들 중앙을 덮으면 안 된다(e2e TCH-05). 변 가운데 핸들은 변을 따라서만 44px 로 넓힌다.
 - 입력은 Pointer Events 하나로 처리한다. `touch-action: none` 은 **드래그 핸들과 리사이즈 핸들에만** 적용되고, `dragMode: 'auto'` 에서 터치는 핸들에서만 드래그가 시작된다(본문은 페이지 스크롤).
 - `responsive` 옵션은 기본 `false`(컨테이너 폭이 바뀌어도 기본 레이아웃 유지). 자동 breakpoint 전환은 `responsive: true` 또는 `setBreakpoint('auto')`.
 - `layout` 과 옵션 우선순위: `layout` 값(columns/rowHeight/gap/breakpoints/float:true)이 옵션보다 우선하며, `layout` 에 float 가 없을 때만 `options.float` 가 적용된다.
@@ -109,8 +113,10 @@ types → core → viewer
   - `Esc` 취소(드래그/리사이즈/외부 끌어오기)는 `keyboard:false` 와 무관해야 한다. 항목 키 처리(`onKey`)만 `isKeyboard()` 로 막는다.
 - 성능: `core/compact.ts` 의 `ColumnIndex` 는 선형 탐색 구현과 **결과가 같아야** 한다(`test/core/compactEquivalence.test.ts` 가 참조 구현과 비교). 압축/충돌 로직을 바꾸면 이 테스트와 `npm run bench:core` 를 함께 돌리고 `docs/performance.md` 를 갱신한다. jsdom 시간은 성능 지표로 쓰지 않는다.
 - 외부 끌어오기 `autoAdd:false`/`onDrop`: drop 시 `finish()`(정리·복원)를 **먼저** 하고 그 뒤에 콜백을 호출한다. 콜백 이후에 모델/DOM 을 건드리는 정리 코드를 추가하지 않는다(콜백 안의 동기 `addItem()` 결과를 덮어쓰게 된다). 전달 항목은 JSON 깊은 복사본이며 `dragInEnd` 는 `autoAdd:false` 에서 항상 `null`.
-- 외부 끌어오기(`setupDragIn`): `DragInController` 가 document 단위 Pointer 리스너 하나로 처리한다. 미리보기는 임시 id 로 `addItem` 을 계산해 placeholder/기존 항목 위치만 갱신하고, 모델은 drop 시 `editor.addItem({x,y})` 한 번으로 바꾼다. breakpoint 편집 중 `addItem` 은 기본 레이아웃에 자동 위치로 추가하고 해당 breakpoint 에서 `moveItem` 한 번의 커밋으로 처리한다.
-- 리소스 해제: 모든 리스너는 `AbortController` signal 로 등록하고 `destroy()` 가 리스너, `ResizeObserver`, 위치 스타일시트, DOM 을 정리한다.
+- 외부 끌어오기(`setupDragIn`): `DragInController` 가 document 단위 Pointer 리스너 하나로 처리한다(원본이 등록되어 있거나 세션 중일 때만 부착). 컨트롤러는 `DragInHost` 의 대상 목록 중 포인터 아래의 에디터 하나를 다루며, 대상이 바뀌면 이전 대상의 미리보기를 원복한다(단일 에디터와 `DriftManager` 가 같은 코드를 쓴다). 미리보기는 임시 id 로 `addItem` 을 계산해 placeholder/기존 항목 위치만 갱신하고, 모델은 drop 시 `editor.addItem({x,y})` 한 번으로 바꾼다. breakpoint 편집 중 `addItem` 은 기본 레이아웃에 자동 위치로 추가하고 해당 breakpoint 에서 `moveItem` 한 번의 커밋으로 처리한다.
+- 리소스 해제: 모든 리스너는 `AbortController` signal 로 등록하고 `destroy()` 가 리스너, `ResizeObserver`, 위치 스타일시트(공유 시트는 참조 수가 0 일 때), DOM 을 정리한다. `destroy()` 는 시작 시 `destroy` 이벤트를 낸다(`DriftManager` 가 등록을 정리).
+- 컨테이너 간 이동: 두 레이아웃은 core `planTransfer` 로 먼저 계산하고, 에디터 내부 `tx*` 메서드(반영 → 실패 시 롤백 → 이력 → 알림)로 적용한다. `removeItem`+`addItem` 연속 호출로 구현하지 않는다. 이력은 `History` 항목의 `link` 로 두 에디터에 연결되며 link 가 버려지면 상대 스택을 절단한다(`cut`). `undo/redo/canUndo/canRedo` 는 맨 위가 link 면 link 에 위임한다. 포인터 이동은 기존 `PointerController` 드래그에 `PointerTransferHost` 를 붙여 처리하며 새 document 리스너를 만들지 않는다.
+- `DriftManager`: 등록 요소 중복은 `getEditorOf()`(모듈 수준 WeakMap)로 막는다. `unregister` 는 등록 정보를 먼저 지운 뒤(재진입 안전) 공통 끌어오기 미리보기 해제 → 활성 해제 → 에디터 destroy → `containerUnregistered` 순서다. Manager `layoutChange` 는 Manager 에 리스너가 있을 때만 에디터를 구독한다. 저장 포맷 검증은 core `parseContainerData`.
 
 ### Viewer 보안
 
