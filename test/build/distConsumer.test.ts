@@ -83,6 +83,30 @@ run('dist: 외부 프로젝트에서의 사용 (Node)', () => {
     expect(css).not.toMatch(/ddr-handle|ddr-resize|ddr-placeholder|ddr-editor|touch-action/);
   });
 
+  it('sortable 진입점(ESM/CJS/UMD)은 SortableManager 를 노출하고 Drift 코드를 포함하지 않는다', () => {
+    const out = node(
+      `const s = require('./dist/sortable.cjs');
+       console.log(JSON.stringify(['Sortable','createSortable','SortableManager','createSortableManager','parseSortableData'].map(k => typeof s[k])));`,
+    );
+    expect(JSON.parse(out)).toEqual(Array(5).fill('function'));
+    const esm = node(
+      `import * as s from './dist/sortable.js'; console.log(JSON.stringify(s.parseSortableData({ version: 1, containers: [{ id: 'a', order: ['x'] }] })));`,
+      true,
+    );
+    expect(JSON.parse(esm)).toEqual({ version: 1, containers: [{ id: 'a', order: ['x'] }] });
+    // src/sortable 은 src/drift 를 import 하지 않는다: 산출물에 Drift 전용 식별자가 없어야 한다
+    const code = ['sortable.js', 'sortable.cjs', 'daracl.sortable.umd.js']
+      .map((f) => fs.readFileSync(path.join(dist, f), 'utf8'))
+      .join('\n');
+    expect(code).not.toMatch(/DriftEditor|DriftManager|planTransfer|daracl-drift|data-ddr/);
+    const umd = fs.readFileSync(path.join(dist, 'daracl.sortable.umd.js'), 'utf8');
+    const window = {} as { Daracl: { sortable: Record<string, unknown> } };
+    runInNewContext(umd, { window });
+    expect(
+      ['createSortable', 'createSortableManager', 'SortableManager'].map((k) => typeof window.Daracl.sortable[k]),
+    ).toEqual(['function', 'function', 'function']);
+  });
+
   it('UMD 번들은 전역 API와 라이선스 배너를 유지한다', () => {
     const code = fs.readFileSync(path.join(dist, 'daracl.drift.umd.js'), 'utf8');
     const window = {} as { Daracl: { drift: { createLayout: () => { version: number }; renderViewer: unknown } } };

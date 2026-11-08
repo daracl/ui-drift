@@ -52,6 +52,8 @@ run('dist: 이동 전 경로의 호환 타입 선언', () => {
 
   it('package.json exports 의 기존 키가 유지된다', () => {
     const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../package.json'), 'utf8'));
-    ['.', './core', './viewer', './umd', './dist/', './style/'].forEach((key) => expect(pkg.exports[key]).toBeDefined());
+    ['.', './core', './viewer', './umd', './dist/', './style/'].forEach((key) =>
+      expect(pkg.exports[key]).toBeDefined(),
+    );
   });
 });

@@ -16,7 +16,11 @@ export default defineConfig({
     timeout: 60000,
   },
   projects: [
-    { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 900 } }, testIgnore: /touch\.spec\.ts$/ },
+    {
+      name: 'desktop',
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 900 } },
+      testIgnore: /touch\.spec\.ts$/,
+    },
     { name: 'mobile', use: { ...devices['Pixel 5'] }, testMatch: /touch\.spec\.ts$/ },
   ],
 });

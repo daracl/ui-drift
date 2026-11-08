@@ -12,7 +12,7 @@ export function resolveGroup(group?: string | SortableGroupOptions): ResolvedGro
   return isString(group) ? { name: group } : { ...group };
 }
 
-interface Names {
+export interface Names {
   to?: string;
   from?: string;
 }
@@ -22,7 +22,7 @@ interface Names {
  * - 생략: pull 은 허용, put 은 같은 그룹 이름일 때만 허용
  * - true/false, 'clone'(pull 전용), 상대 그룹 이름 또는 이름 배열, 함수(결과를 다시 평가)
  */
-function evaluate(
+export function evaluateAccess(
   value: SortableAccessValue<boolean | 'clone'> | undefined,
   pull: boolean,
   names: Names,
@@ -32,7 +32,7 @@ function evaluate(
   if (value == null) return pull || sameGroup;
   if (value === false) return false;
   if (pull && value === 'clone') return 'clone';
-  if (isFunction(value)) return evaluate((value as (c: SortableAccessContext) => never)(ctx), pull, names, ctx);
+  if (isFunction(value)) return evaluateAccess((value as (c: SortableAccessContext) => never)(ctx), pull, names, ctx);
 
   const other = pull ? names.to : names.from; // 상대 목록의 그룹 이름
   if (value === true) return true;
@@ -45,7 +45,7 @@ function evaluate(
  */
 export function checkTransfer(from: ResolvedGroup, to: ResolvedGroup, ctx: SortableAccessContext): boolean | 'clone' {
   const names: Names = { from: from.name, to: to.name };
-  const pull = evaluate(from.pull, true, names, ctx);
+  const pull = evaluateAccess(from.pull, true, names, ctx);
   if (!pull) return false;
-  return evaluate(to.put, false, names, ctx) ? pull : false;
+  return evaluateAccess(to.put, false, names, ctx) ? pull : false;
 }

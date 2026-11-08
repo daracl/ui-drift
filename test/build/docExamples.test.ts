@@ -7,7 +7,7 @@ import * as path from 'path';
 import * as ts from 'typescript';
 
 const root = path.resolve(__dirname, '../..');
-const docs = ['docs/MULTI_CONTAINER.md'];
+const docs = ['docs/MULTI_CONTAINER.md', 'docs/SORTABLE.md'];
 
 function blocks(file: string): string[] {
   const md = fs.readFileSync(path.join(root, file), 'utf8');
@@ -19,14 +19,14 @@ describe('문서 예제 컴파일', () => {
     '%s 의 TypeScript 예제가 타입 검사를 통과한다',
     (doc) => {
       const snippets = blocks(doc);
-      expect(snippets.length).toBeGreaterThan(5);
+      expect(snippets.length).toBeGreaterThan(1);
 
       const dir = path.join(root, '.tmp', 'doc-examples');
       fs.mkdirSync(dir, { recursive: true });
       const files = snippets.map((code, i) => {
         const file = path.join(dir, `${path.basename(doc, '.md')}-${i}.ts`);
-        // CSS import 는 번들러가 처리하므로 타입 검사에서는 뺀다. 각 파일을 모듈로 만든다
-        fs.writeFileSync(file, `${code.replace(/^import '.*\.css';$/gm, '')}\nexport {};\n`);
+        // CSS/SCSS import 는 번들러가 처리하므로 타입 검사에서는 뺀다(뒤의 주석 포함). 각 파일을 모듈로 만든다
+        fs.writeFileSync(file, `${code.replace(/^import '.*\.s?css';.*$/gm, '')}\nexport {};\n`);
         return file;
       });
 
@@ -45,6 +45,7 @@ describe('문서 예제 컴파일', () => {
           '@daracl/drift': ['src/index.ts'],
           '@daracl/drift/viewer': ['src/viewer.ts'],
           '@daracl/drift/core': ['src/core.ts'],
+          '@daracl/drift/sortable': ['src/sortable.ts'],
           '@/*': ['src/*'],
           '@t/*': ['src/drift/types/*'],
         },

@@ -52,6 +52,8 @@ sortable.destroy();
 복제본(`dragClass`)이 지정한 요소의 영역 밖으로 나가지 못하게 가둔다.
 
 ```ts
+import { createSortable } from '@daracl/drift/sortable';
+
 createSortable('#list', { containment: true });            // 이 목록 안에서만
 createSortable('#list', { containment: 'parent' });        // 목록의 부모 요소 안에서만
 createSortable('#a', { group: 'g', containment: '.zone' }); // closest('.zone') 안에서만
@@ -80,7 +82,7 @@ createSortable('#a', { group: 'g', containment: '.zone' }); // closest('.zone') 
 | `choose` | 출발 목록 | 항목을 잡았을 때(`delay` 후) |
 | `start` | 출발 목록 | 드래그가 시작됐을 때 |
 | `clone` | 출발 목록 | 복제본이 처음 만들어졌을 때 |
-| `onMove` | 출발 목록 | 이동하려 할 때. `false` 로 막고 `-1`/`1` 로 앞/뒤 삽입을 강제 |
+| `onMove` | 출발 목록 | 이동하려 할 때. `false` 로 막고 `-1`/`1` 로 앞/뒤 삽입을 강제. 콜백 안에서 `cancel()`/`destroy()`(또는 Manager `unregister`/`destroy`)로 드래그를 끝내면 반환값과 무관하게 그 이동은 하지 않는다 |
 | `remove` / `add` | 출발 / 도착 목록 | 다른 목록으로 옮겼을 때 |
 | `update` | 출발 목록 | 같은 목록 안에서 순서가 바뀌었을 때 |
 | `sort` | 관련된 목록 모두 | add/update/remove 어느 쪽이든 |
@@ -88,9 +90,90 @@ createSortable('#a', { group: 'g', containment: '.zone' }); // closest('.zone') 
 
 이벤트 객체: `{ item, clone, from, to, oldIndex, newIndex, cancelled, originalEvent }`. 인덱스는 `draggable` 항목 기준.
 
+드래그 중의 사용자 콜백(`onChoose` `onStart` `onClone` `onMove`, pull/put 함수, `mirror` 함수) 안에서 `cancel()`/`destroy()` 로 드래그를 끝내도 안전하다. 콜백이 돌아온 뒤 그 드래그의 삽입·복제·애니메이션·자동 스크롤은 이어지지 않고, 항목은 원래 자리에 남으며 `end` 는 `cancelled: true` 로 한 번만 호출된다. 끝난 드래그의 콜백이 그 뒤에 시작한 드래그를 건드리지도 않는다.
+
+다른 목록으로 들어갈 때는 도착 목록이 그 항목을 관리할 수 있는지 확인한다: 도착 목록의 자식 자리에서 `draggable` 에 맞지 않는 항목은 그 목록에 들어가지 않는다(넣으면 `items()`/`toArray()` 에서 빠져 다시 끌 수도 저장할 수도 없다). `.list > li` 처럼 부모 문맥에 의존하는 selector 는 도착 목록 문맥으로 판정한다.
+
 ## 메서드
 
-`Sortable.get(el)` · `Sortable.isDragging()` · `sortable.items()` · `toArray()` · `sort(order, animate?)` · `option(name[, value])` · `on/off` · `cancel()` · `destroy()`
+`Sortable.get(el)` · `Sortable.isDragging()` · `sortable.items()` · `toArray()` · `sort(order, animate?)` · `option(name[, value])` · `on/off` · `cancel()` · `destroy()` · `isDestroyed()`
+
+드롭 때 리스너 하나가 예외를 던져도 나머지 이벤트(remove/add/sort/end)는 모두 호출되고, 끝난 뒤 첫 예외가 전달된다. `destroy()` 도 같은 방식으로 끝까지 해제한다.
+
+## 여러 목록 관리 (SortableManager)
+
+`DriftManager` 와 같은 형태로 여러 Sortable 목록을 하나의 관리자에 등록한다(칸반 보드 같은 화면).
+각 목록은 일반 Sortable 과 같고, Manager 는 등록/해제, 목록 간 이동 범위, 활성 목록, 이벤트 집계, API 이동, 전체 순서 저장·복원을 맡는다.
+
+```ts
+import { createSortableManager } from '@daracl/drift/sortable';
+
+const board = createSortableManager(); // { crossContainer: false } 면 목록 안 정렬만
+board.register('palette', '#palette', { group: { pull: 'clone', put: false }, sort: false });
+board.register('todo', '#todo', { handle: '.grip' });
+board.register('done', '#done');
+
+board.on('itemTransfer', ({ from, to, itemId, mode, source }) => console.log(from, '→', to, itemId, mode, source));
+
+const r = board.transferItem({ from: 'todo', to: 'done', itemId: 't1', index: 0 });
+if (!r.moved) console.log('거절:', r.reason);
+
+const saved = board.toJSON(); // { version: 1, containers: [{ id, order: ['t1', ...] }] }
+board.fromJSON(saved);
+board.destroy();
+```
+
+| 메서드 | 설명 |
+| --- | --- |
+| `register(id, target, options?)` → Sortable | 목록(요소/selector)에 Sortable 을 만들어 등록. 빈/중복 id, 없는 요소, 이미 Sortable 이 있는 요소(다른 Manager 포함)는 예외. `options.group` 은 이름 없이 `{ pull, put }` 만 줄 수 있다 |
+| `unregister(id)` → boolean | 등록 해제 + Sortable destroy (목록 요소와 항목은 남는다). 진행 중인 관련 드래그는 원래 자리로 취소된다 |
+| `get(id)` / `has(id)` / `getIds()` / `getAll()` / `getIdOf(el\|sortable)` | 조회 (등록 순서) |
+| `setActive(id\|null)` / `getActiveId()` / `getActive()` | 활성 목록. 목록을 누르거나 포커스가 들어오면, 다른 목록으로 옮겨 놓으면 자동으로 바뀐다 |
+| `setCrossContainer(bool)` / `isCrossContainer()` | 목록 사이 포인터 이동 켜기/끄기(기본 켜짐). 끄면 다른 목록에 들어가 있던 진행 중 드래그는 원래 자리로 취소 |
+| `cancelDrag()` | 이 Manager 의 목록이 관련된 진행 중 드래그 취소 |
+| `transferItem({ from, to, itemId, index? }, { source?, animate? })` → 결과 | 프로그램 이동. 성공 `{ moved: true, from, to, item, oldIndex, newIndex }`, 거절 `{ moved: false, reason }` |
+| `getOrders()` / `toJSON(space?)` / `fromJSON(json\|data, { unknown? })` | 전체 순서 저장·복원 |
+| `on` / `once` / `off` | Manager 이벤트 |
+| `destroy()` / `isDestroyed()` / `groupName` | 전체 해제(두 번 호출해도 안전) / 등록 목록이 공유하는 그룹 이름 |
+
+### 이동 범위와 규칙
+
+- Manager 마다 고유한 그룹 이름(`groupName`, 예: `dsr-manager-1`)을 만들어 등록 목록에 준다. **같은 Manager 의 목록끼리만** 항목이 오가고, 다른 Manager 나 Manager 밖의 Sortable 과는 섞이지 않는다.
+- 목록별 `pull`(이동/`'clone'`/false/그룹 이름/함수)과 `put` 규칙은 그대로 적용된다. 그 위에 Manager 의 `crossContainer` 가 꺼져 있으면 어떤 목록도 다른 목록의 항목을 받지 않는다(목록 안 정렬은 된다).
+- 도착 목록이 관리할 수 없는 항목은 받지 않는다: `draggable` 불일치(위 [이벤트](#이벤트) 참고), 또는 도착 목록의 `dataIdAttr` 로 출발 목록에서와 같은 id 를 읽을 수 없는 항목(id 가 없던 항목은 제한하지 않는다).
+- 끄는 경로가 여러 목록을 지나면 항목은 지나간 목록으로 옮겨 다니며, 받지 않는 목록 위에서 놓으면 **마지막으로 받아 준 목록**에 남는다(일반 Sortable 과 같은 동작).
+
+### transferItem
+
+- 포인터 이동 옵션(`crossContainer`, pull/put)과 무관하게 옮긴다. 다만 도착 목록이 관리할 수 없는 항목은 옮기지 않는다(`incompatible-item`, 아래).
+- `itemId` 는 출발 목록의 `dataIdAttr` 값이다. `index` 는 도착 목록의 draggable 항목 기준 위치이고, 생략하거나 항목 수보다 크면 맨 뒤다. 음수나 정수가 아니면 예외.
+- 출발 목록에 `remove`, 도착 목록에 `add`, 두 목록에 `sort` 를 드래그와 같은 순서로 낸다(옵션 콜백과 `on` 구독 모두). 그 뒤 도착 목록을 활성으로 만들고 Manager `itemTransfer`(source:'api')를 낸다.
+- 거절 사유: `destroyed`, `busy`(드래그 중이거나 이동 처리 중의 재진입), `missing-container`, `same-container`, `missing-item`, `duplicate-item`(출발 목록에 같은 id 가 여럿), `disconnected`, `incompatible-item`. 거절이면 DOM 순서·부모·활성 목록이 그대로이고 remove/add/sort/itemTransfer 도 내지 않는다.
+- `incompatible-item`: 도착 목록 자식 자리에서 그 목록의 `draggable` 에 맞지 않거나(부모 문맥 selector 는 도착 문맥으로 판정하고, 판정 뒤 항목은 원래 자리로 돌아간다), 도착 목록의 `dataIdAttr` 로 같은 `itemId` 를 읽을 수 없는 경우. 두 목록의 `dataIdAttr` 가 달라도 도착 속성에 같은 값이 있으면 허용한다. 항목의 class·태그·속성은 자동으로 바꾸지 않으므로, 호출자가 호환되게 준비한 뒤 다시 요청한다. 성공이면 항목은 도착 `items()` 에 있고 `newIndex` 는 그 위치(0 이상)다.
+- 도착 목록에 이미 같은 id 의 항목이 있어도 옮긴다(복제 id 와 같은 기존 계약, id 를 새로 만들지 않는다). 이때 `fromJSON` 은 어느 요소인지 알 수 없어 예외가 된다.
+- 리스너 예외는 완료된 이동을 되돌리지 않고, 나머지 알림을 마친 뒤 첫 예외를 던진다.
+
+### 순서 저장 / 복원
+
+```json
+{ "version": 1, "containers": [{ "id": "todo", "order": ["t2", "t1"] }, { "id": "done", "order": [] }] }
+```
+
+- `fromJSON` 은 전체를 먼저 검증한다: 구조, version, 빈/중복 목록 id, 데이터 안의 중복 항목 id, 미등록 목록과 어느 목록에도 없는 항목 id(기본 `unknown:'error'`, `'ignore'` 면 건너뜀), 여러 목록에 같은 id 가 있어 어느 요소인지 알 수 없는 경우, 도착 목록이 관리할 수 없는 항목(`dataIdAttr` 로 같은 id 를 읽을 수 없거나 옮긴 자리에서 `draggable` 에 맞지 않음 — `unknown:'ignore'` 여도 예외). 오류면 **DOM 을 바꾸지 않는다**(옮긴 뒤에야 알 수 있는 `draggable` 판정이 실패하면 모든 목록을 원래 자식 순서로 되돌린 뒤 예외).
+- 목록 사이로 옮겨진 항목도 원래 목록으로 돌아간다. 데이터에 있는 목록은 데이터 순서의 항목 뒤에 데이터 어디에도 없는 기존 항목을 원래 순서로 둔다. 데이터에 없는 목록은 순서를 그대로 두지만, 그 목록의 항목이 다른 목록의 복원 항목으로 지정되어 있으면 그 항목은 빠져나간다.
+- 항목 요소를 새로 만들거나 지우지 않는다. 목록 이벤트(add/remove/sort)는 내지 않는다. 드래그 중에는 예외.
+
+### Manager 이벤트
+
+| 이벤트 | 인자 |
+| --- | --- |
+| `containerRegistered` / `containerUnregistered` | `{ containerId, sortable }` / `{ containerId }` |
+| `activeChange` | `{ containerId, previousId, sortable }` |
+| `start` / `sort` / `end` | `{ containerId, event }` — 목록의 같은 이름 이벤트 (`sort` 는 목록 간 이동이면 두 목록에서 한 번씩) |
+| `itemTransfer` | `{ from, to, item, itemId, oldIndex, newIndex, mode: 'move'\|'clone', source: 'user'\|'api' }` |
+
+- 등록/해제 순서와 재진입은 `DriftManager` 와 같다: 해제는 등록 정보를 먼저 지우고, 활성이었다면 `activeChange(null)` → Sortable destroy → `containerUnregistered`. 정리 단계는 리스너 예외가 있어도 끝까지 하고 첫 예외를 던진다.
+- Sortable 을 직접 `destroy()` 해도 등록이 정리된다.
 
 ## 입력/접근성 정책
 
@@ -104,7 +187,7 @@ createSortable('#a', { group: 'g', containment: '.zone' }); // closest('.zone') 
 src/dom/autoScroll.ts   공통: 가장자리 자동 스크롤
 src/dom/flip.ts         공통: FLIP 애니메이션
 src/event/Emitter.ts    공통: 이벤트 발행기
-src/sortable/           Sortable 본체 (src/drift 를 import 하지 않는다), types.d.ts 는 공개 타입
+src/sortable/           Sortable 본체와 SortableManager (src/drift 를 import 하지 않는다), types.d.ts 는 공개 타입
 src/sortable.ts         공개 엔트리, src/sortable.umd.ts 는 UMD 엔트리
 ```
 
@@ -127,7 +210,8 @@ src/sortable.ts         공개 엔트리, src/sortable.umd.ts 는 UMD 엔트리
 - **`mirror: 'box'`** 는 내용을 복사하지 않아 가장 가볍다. 항목이 아주 무겁거나 내용이 복제본에 필요 없을 때 쓴다.
 - **복제본은 `aria-hidden` + `inert`** 라서 접근성 트리와 포커스를 늘리지 않는다.
 - **이동 애니메이션은 실제로 자리가 바뀌는 구간의 항목만** 측정하고 `transform` 을 쓴다(앞뒤 나머지는 건드리지 않는다).
-- **자리 판정은 항목 수와 무관하다.** 포인터 아래 항목만 보고 목록 전체를 훑지 않으며, 배치 방향은 드래그마다 한 번만 판정한다.
+- **포인터가 항목 위에 있으면 자리 판정은 항목 수와 무관하다.** 포인터 아래 항목과 끄는 항목의 위치만 읽는다. 포인터가 항목이 아닌 곳(목록 여백, 항목 사이 틈, draggable 이 아닌 자식)에 있으면 가장 가까운 항목을 찾으려고 모든 직계 항목의 `getBoundingClientRect` 를 읽는다(O(n)). `test/sortable/perf.test.ts` 가 n=100/1000/3000 에서 항목 위 4회 이하, 빈 곳 약 n회임을 계측한다(jsdom 의 호출 횟수, 실제 시간이 아니다). 배치 방향은 드래그마다 한 번만 판정한다.
+- 자리를 바꿀 때의 애니메이션 비용은 항목 수가 아니라 **이동 구간의 크기**(같은 목록에서 이전 자리와 새 자리 사이, 다른 목록이면 출발 목록의 뒤쪽과 도착 목록의 삽입 지점 이후)에 비례한다. 3000개 목록의 맨 앞 항목을 맨 뒤로 보내면 그 사이 전부를 측정한다.
 - **자동 스크롤은 스크롤 가능한 조상 목록을 캐시**해 프레임마다 `getComputedStyle` 을 부르지 않는다.
 - **`html` 이나 목록의 상속 속성(`cursor`, `user-select`)을 바꾸지 않는다.** 드래그를 시작하는 순간 문서의 모든 요소가 스타일을 다시 계산되어 3000개 기준 수십 ms 가 더 걸린다.
   텍스트 선택은 `selectstart` 를 막고 선택 영역을 지워서 처리하고, `grabbing` 커서는 복제본에만 준다. `html.dsr-dragging` 클래스는 사용자 코드를 위해 붙지만 `daracl.sortable.css` 의 규칙은 이 클래스에 의존하지 않는다.
@@ -139,4 +223,4 @@ src/sortable.ts         공개 엔트리, src/sortable.umd.ts 는 UMD 엔트리
 - multi-drag, swap, 그리드 좌표 정렬은 없다.
 - 중첩 목록은 안쪽 목록의 항목을 잡으면 안쪽만 드래그되는 것까지만 테스트했다. 중첩 목록 사이의 이동은 검증하지 않았다.
 - 복제본에서 `canvas`/`iframe`/`video` 는 빈 상자로 보인다(위 [성능](#성능) 참고).
-- 실제 터치 기기에서의 동작은 자동 테스트로 검증하지 못했다(Playwright 는 마우스로만 검증).
+- 터치는 Playwright 의 Pixel 5 에뮬레이션 + CDP 터치 입력(`e2e/*touch.spec.ts`)으로 검증한다. 실제 터치 기기에서의 동작은 자동 테스트로 검증하지 못했다.

@@ -124,6 +124,47 @@ describe('Sortable 성능 최적화', () => {
     expect((added.querySelector('.grip') as Element).classList.contains('dsr-handle')).toBe(false);
   });
 
+  it.each([100, 1000, 3000])(
+    '자리 판정의 좌표 읽기 (n=%i): 항목 위에서는 항목 수와 무관, 항목이 아닌 곳에서는 nearestItem 이 전체 항목을 읽는다 (O(n))',
+    (n) => {
+      const list = makeList(
+        Array.from({ length: n }, (_, i) => `i${i}`),
+        'l',
+      );
+      Array.from(list.children).forEach((c) => c.classList.add('it'));
+      const foot = document.createElement('div'); // draggable 이 아닌 고정 자식 (빈 공간 역할)
+      list.appendChild(foot);
+      // onMove false: 삽입(FLIP 측정은 이동 구간 크기에 비례)을 빼고 자리 판정만 센다
+      make(list, { animation: 0, draggable: '.it', onMove: () => false });
+      // 공용 mockLayout 은 rect 마다 형제를 다시 훑어(O(n²)) 큰 n 에서 느리다. 시작 시 순서로 고정한 가벼운 레이아웃을 쓴다
+      // (읽기 '횟수' 만 세므로 드래그 중 순서 변화는 영향이 없다)
+      const index = new Map(Array.from(list.children, (c, i) => [c, i]));
+      const box = (top: number, h: number) =>
+        ({ left: 0, top, right: 200, bottom: top + h, width: 200, height: h, x: 0, y: top } as DOMRect);
+      const rects = jest.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+        const i = index.get(this);
+        return i === undefined ? box(0, (n + 1) * ITEM_H) : box(i * ITEM_H, ITEM_H);
+      });
+      const doc = document as unknown as { elementFromPoint: (x: number, y: number) => Element | null };
+      doc.elementFromPoint = (_x, y) => list.children[Math.floor(y / ITEM_H)] ?? list;
+      const reads = (fn: () => void) => {
+        const before = rects.mock.calls.length;
+        fn();
+        return rects.mock.calls.length - before;
+      };
+      pointer(list.children[0], 'pointerdown', 10, 10);
+      pointer(document, 'pointermove', 15, 15);
+      // 같은 항목(i5) 위에서 기준선을 넘지 않는 이동: 대상 항목과 끄는 항목만 읽는다
+      const overItem = reads(() => pointer(document, 'pointermove', 10, 5 * ITEM_H + 5));
+      // 고정 자식(foot) 위: 가장 가까운 항목을 찾으려고 끄는 항목을 뺀 모든 항목을 읽는다
+      const overEmpty = reads(() => pointer(document, 'pointermove', 10, n * ITEM_H + 5));
+      pointer(document, 'pointerup', 10, n * ITEM_H + 5);
+      expect(overItem).toBeLessThanOrEqual(4);
+      expect(overEmpty).toBeGreaterThanOrEqual(n - 1);
+      expect(overEmpty).toBeLessThanOrEqual(n + 4);
+    },
+  );
+
   it('배치 방향은 드래그마다 한 번만 판정한다 (이동마다 getComputedStyle 을 부르지 않는다)', () => {
     const list = makeList(['a', 'b', 'c', 'd'], 'l');
     make(list, { animation: 0 });

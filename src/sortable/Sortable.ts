@@ -61,6 +61,8 @@ interface Session {
   clientY: number;
   /** 목록별 배치 방향 캐시 (드래그 중에는 바뀌지 않으므로 getComputedStyle 을 매 이동마다 부르지 않는다) */
   axes: Map<HTMLElement, Axis>;
+  /** 다른 목록이 이 항목을 관리할 수 있는지(draggable) 판정 캐시 */
+  manageable: Map<Sortable, boolean>;
   /** 애니메이션 때문에 판정을 미룬 경우 true. 다음 프레임에 다시 판정한다 */
   retry?: boolean;
   /** 위치 판정에 쓰는 좌표. containment 가 있으면 포인터를 범위 안으로 맞춘 값이다 */
@@ -93,6 +95,9 @@ interface Session {
 const registry = new WeakMap<HTMLElement, Sortable>();
 let activeSession: Session | undefined;
 
+/** s 가 아직 진행 중인 세션인지. 사용자 콜백(cancel/destroy/unregister 가능)이 돌아온 뒤 매번 확인한다 */
+const alive = (s: Session): boolean => activeSession === s;
+
 function clampRange(value: number, min: number, max: number): number {
   return max < min ? min : Math.min(Math.max(value, min), max); // 범위가 항목보다 작으면 시작점에 붙인다
 }
@@ -117,6 +122,8 @@ export class Sortable {
   private readonly abort = new AbortController();
   private observer?: MutationObserver;
   private destroyed = false;
+  /** destroy 시작 시 호출할 내부 훅 (SortableManager 가 직접 destroy 된 목록의 등록을 정리한다) */
+  private readonly destroyHooks = new Set<() => void>();
 
   constructor(el: HTMLElement, options: SortableOptions = {}) {
     if (!(el instanceof HTMLElement)) throw new TypeError('Sortable: HTMLElement 가 필요합니다.');
@@ -170,6 +177,12 @@ export class Sortable {
     return !!activeSession?.active;
   }
 
+  /** @internal 진행 중인 드래그의 출발 목록과 항목이 지금 들어 있는 목록 (드래그가 시작되지 않았으면 null) */
+  static dragInfo(): { source: Sortable; current: Sortable; item: HTMLElement } | null {
+    const s = activeSession;
+    return s?.active ? { source: s.source, current: s.current, item: s.item } : null;
+  }
+
   // ───────────────────────────── 공개 API ─────────────────────────────
 
   on<K extends keyof SortableEventMap>(name: K, handler: SortableEventMap[K]): () => void {
@@ -221,16 +234,63 @@ export class Sortable {
     if (s && (s.source === this || s.current === this)) this.finish(s, true);
   }
 
+  /** destroy() 가 호출되었는지 */
+  isDestroyed(): boolean {
+    return this.destroyed;
+  }
+
   destroy(): void {
     if (this.destroyed) return;
-    this.cancel();
+    // 진행 중인 드래그 취소와 해제 훅의 예외가 있어도 해제는 끝까지 하고, 마지막에 첫 예외를 던진다
+    const errors = new ErrorCollector();
+    errors.run(() => this.cancel());
     this.destroyed = true;
+    this.destroyHooks.forEach((hook) => errors.run(hook));
+    this.destroyHooks.clear();
     this.abort.abort();
     this.observer?.disconnect();
     this.emitter.clear();
     registry.delete(this.el);
     this.el.classList.remove(CLS.sortable, CLS.touchNone);
     this.el.querySelectorAll(`.${CLS.handle}`).forEach((h) => h.classList.remove(CLS.handle));
+    errors.throw();
+  }
+
+  /** @internal destroy 시작 시 한 번 호출할 함수를 등록한다. 반환 함수로 해제 */
+  addDestroyHook(hook: () => void): () => void {
+    this.destroyHooks.add(hook);
+    return () => this.destroyHooks.delete(hook);
+  }
+
+  /** @internal 드래그 밖에서 일어난 변경(SortableManager.transferItem)을 이 목록의 이벤트로 알린다 (옵션 콜백 + on 구독) */
+  dispatch<K extends keyof SortableEventMap>(name: K, evt: SortableEvent): void {
+    if (!this.destroyed) this.fire(name, evt);
+  }
+
+  /**
+   * @internal item 을 이 목록의 직계 자식으로 두었을 때 draggable 에 일치해 이 목록이 관리(정렬·조회)할 수 있는지.
+   * `.list > .item` 처럼 부모 문맥에 의존하는 selector 도 있으므로, 이미 이 목록의 자식이 아니면 맨 뒤에 잠시 넣어 판정하고
+   * 원래 자리(부모, 다음 형제)로 되돌린다. 잘못된 selector 의 예외는 그대로 던진다(되돌린 뒤).
+   */
+  canManage(item: HTMLElement): boolean {
+    const { draggable } = this.options;
+    if (!draggable) return true;
+    if (item.parentElement === this.el) return item.matches(draggable);
+    const parent = item.parentNode;
+    const next = item.nextSibling;
+    this.el.appendChild(item);
+    try {
+      return item.matches(draggable);
+    } finally {
+      if (parent) parent.insertBefore(item, next);
+      else item.remove();
+    }
+  }
+
+  /** @internal 진행 중인 드래그가 이 목록과 관련되어 있는지 (출발 목록이거나 항목이 지금 이 목록에 있다) */
+  isInvolvedInDrag(): boolean {
+    const s = activeSession;
+    return !!s && (s.source === this || s.current === this);
   }
 
   // ───────────────────────────── 항목 탐색 ─────────────────────────────
@@ -262,7 +322,8 @@ export class Sortable {
     if (!handle || delay > 0) return;
     for (const record of records) {
       record.addedNodes.forEach((node) => {
-        if (node instanceof HTMLElement && (!draggable || node.matches(draggable))) {
+        // 잠시 들어왔다 나간 항목(canManage 의 판정, 거절된 이동)은 건너뛴다
+        if (node instanceof HTMLElement && node.parentElement === this.el && (!draggable || node.matches(draggable))) {
           node.querySelectorAll(handle).forEach((h) => h.classList.add(CLS.handle));
         }
       });
@@ -324,6 +385,7 @@ export class Sortable {
       px: e.clientX,
       py: e.clientY,
       axes: new Map(),
+      manageable: new Map(),
       width: 0,
       height: 0,
       grabX: 0,
@@ -380,6 +442,7 @@ export class Sortable {
       // 대기 시간 전에 움직였다면 드래그가 아니라 스크롤/제스처로 보고 물러난다
       if (!s.ready) return this.finish(s, true);
       this.startDrag(s);
+      if (!alive(s)) return; // mirror 함수나 onStart 에서 취소·해제했다
     }
     this.follow(s);
     this.hitTest(s);
@@ -408,6 +471,7 @@ export class Sortable {
     s.oldNext = item.nextSibling;
 
     const mirrorItem = createMirrorItem(item, this.options.mirror);
+    if (!alive(s)) return; // 사용자 mirror 함수 안에서 취소·해제했다
     toggleClasses(mirrorItem, this.options.chosenClass, false);
     toggleClasses(mirrorItem, this.options.ghostClass, false);
     toggleClasses(mirrorItem, this.options.dragClass, true);
@@ -462,6 +526,7 @@ export class Sortable {
     document.documentElement.classList.add(CLS.dragging);
     window.getSelection()?.removeAllRanges();
     this.fire('start', this.makeEvent(s));
+    if (!alive(s)) return; // onStart 에서 취소·해제했다: 자동 스크롤 RAF 를 시작하지 않는다
 
     // 드래그 중에 option() 으로 바꾼 값도 바로 반영되도록 getter 로 읽는다
     const opts = this.options;
@@ -474,7 +539,7 @@ export class Sortable {
       },
     });
     const tick = (now: number): void => {
-      if (activeSession !== s || !s.active) return;
+      if (!alive(s) || !s.active) return;
       if (s.retry) {
         s.retry = false;
         this.hitTest(s); // 이동 애니메이션 때문에 미뤘던 판정을 다시 한다 (아직 진행 중이면 over() 가 다시 미룬다)
@@ -533,9 +598,13 @@ export class Sortable {
     let node: Element | null = hit;
     while (node) {
       const target = registry.get(node as HTMLElement);
-      if (target && !s.item.contains(target.el) && target.accepts(s)) {
-        target.over(s, hit as Element);
-        return;
+      if (target && !s.item.contains(target.el)) {
+        const ok = target.accepts(s);
+        if (!alive(s)) return; // pull/put 함수에서 취소·해제했다
+        if (ok) {
+          target.over(s, hit as Element);
+          return;
+        }
       }
       node = node.parentElement;
     }
@@ -543,7 +612,23 @@ export class Sortable {
 
   /** 이 목록이 s 의 항목을 받을 수 있는지 (출발 목록은 언제든 돌아올 수 있다) */
   private accepts(s: Session): boolean {
-    return !this.options.disabled && (this === s.source || !!this.transferMode(s));
+    if (this.options.disabled) return false;
+    if (this === s.source) return true;
+    return !!this.transferMode(s) && alive(s) && this.holds(s);
+  }
+
+  /**
+   * 다른 목록에서 들어오는 항목을 이 목록이 관리할 수 있는지 (draggable 판정). 관리할 수 없는 항목을 넣으면
+   * items()/toArray() 에서 빠져 다시 끌 수도, 저장할 수도 없다. 판정은 DOM 을 잠시 옮기므로 세션 동안 목록별로 기억한다.
+   */
+  private holds(s: Session): boolean {
+    if (s.item.parentElement === this.el) return true;
+    let ok = s.manageable.get(this);
+    if (ok === undefined) {
+      ok = this.canManage(s.item);
+      s.manageable.set(this, ok);
+    }
+    return ok;
   }
 
   private transferMode(s: Session): boolean | 'clone' {
@@ -561,7 +646,7 @@ export class Sortable {
     if (inThisList && !this.options.sort) return; // 정렬이 꺼진 목록 안에서는 순서를 바꾸지 않는다
 
     const mode = this === s.source ? true : this.transferMode(s);
-    if (!mode) return;
+    if (!alive(s) || this.destroyed || !mode) return;
 
     const x = s.px;
     const y = s.py;
@@ -574,9 +659,7 @@ export class Sortable {
     // 포인터가 항목이 아닌 곳(여백, 항목 사이 틈, 목록 가장자리)에 있으면 가장 가까운 항목을 기준으로 삼는다.
     // 이렇게 하면 빈 곳에서도 일반 항목 위와 같은 '이동하는 방향으로 기준선을 넘었을 때만' 규칙이 적용되어,
     // 여러 줄 배치에서 같은 줄 이웃을 지나지 않았는데 맨 앞/맨 뒤로 튀는 일이 없다.
-    const anchor =
-      target ??
-      this.nearestItem(dragged, x, y);
+    const anchor = target ?? this.nearestItem(dragged, x, y);
 
     if (!this.options.sort || !anchor) {
       // 정렬 없이 들어오는 목록이거나 비어 있는 목록: 맨 뒤에 넣는다
@@ -620,7 +703,8 @@ export class Sortable {
       originalEvent: s.lastEvent,
     };
     const veto = s.source.options.onMove?.call(s.source, move);
-    if (veto === false) return;
+    // onMove 안에서 cancel/destroy/unregister 로 세션이 끝났거나 이 목록이 해제됐으면 반환값과 무관하게 넣지 않는다
+    if (!alive(s) || this.destroyed || veto === false) return;
     if (anchor && (veto === 1 || veto === -1)) ref = veto === 1 ? anchor.nextSibling : anchor;
 
     this.place(s, ref, mode);
@@ -672,6 +756,7 @@ export class Sortable {
 
     if (this === s.source || mode !== 'clone') this.removeClone(s);
     else this.putClone(s);
+    if (!alive(s) || this.destroyed) return; // onClone 에서 취소·해제했다 (복제본은 finish 가 이미 지웠다)
 
     disableScrollAnchoring(this.el, s.anchors); // 다른 목록(과 그 스크롤 조상)으로 들어올 때도 앵커링을 끈다
     this.el.insertBefore(item, ref);
@@ -770,18 +855,38 @@ export class Sortable {
       return;
     }
 
+    // 리스너 하나가 예외를 던져도 나머지 목록/이벤트는 모두 알리고, 끝난 뒤 첫 예외를 던진다
+    const errors = new ErrorCollector();
     const evt = source.makeEvent(s);
     const target = s.current;
     if (target !== source) {
-      source.fire('remove', evt);
-      target.fire('add', evt);
-      source.fire('sort', evt);
-      target.fire('sort', evt);
+      errors.run(() => source.fire('remove', evt));
+      errors.run(() => target.fire('add', evt));
+      errors.run(() => source.fire('sort', evt));
+      errors.run(() => target.fire('sort', evt));
     } else if (evt.newIndex !== evt.oldIndex) {
-      source.fire('update', evt);
-      source.fire('sort', evt);
+      errors.run(() => source.fire('update', evt));
+      errors.run(() => source.fire('sort', evt));
     }
-    source.fire('end', evt);
+    errors.run(() => source.fire('end', evt));
+    errors.throw();
+  }
+}
+
+/** @internal 여러 단계를 모두 실행하면서 첫 예외만 보관했다가 마지막에 다시 던진다 */
+export class ErrorCollector {
+  private first: { error: unknown } | undefined;
+
+  run(fn: () => void): void {
+    try {
+      fn();
+    } catch (error) {
+      if (!this.first) this.first = { error };
+    }
+  }
+
+  throw(): void {
+    if (this.first) throw this.first.error;
   }
 }
 

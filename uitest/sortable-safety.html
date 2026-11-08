@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sortable 콜백 안전성 / 호환되지 않는 항목</title>
+    <style>
+      body { font-family: system-ui, sans-serif; padding: 12px; margin: 0; font-size: 13px; background: #f3f4f6; }
+      h3 { margin: 12px 0 6px; }
+      .toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
+      .toolbar button, .toolbar select { min-height: 30px; padding: 0 8px; }
+      .board { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+      .list { width: 180px; min-height: 44px; margin: 0; padding: 4px; list-style: none; background: #fff; border: 2px solid #cbd5e1; border-radius: 8px; }
+      .list > li { background: #f8fafc; border: 1px solid #d0d7de; border-radius: 6px; padding: 8px 10px; margin: 4px 0; }
+      .list > li.b { background: #ecfdf5; }
+      #status, #status2 { min-height: 1.4em; color: #475569; font-family: monospace; }
+      #log { height: 120px; overflow: auto; margin: 0; padding: 0; list-style: none; font-family: monospace; font-size: 11px; }
+    </style>
+  </head>
+  <body>
+    <h3>1. onMove 안에서 세션 끝내기</h3>
+    <div class="toolbar">
+      <label>onMove 동작
+        <select id="action">
+          <option value="none">아무것도 안 함</option>
+          <option value="cancel">cancel()</option>
+          <option value="destroy">destroy()</option>
+          <option value="unregister-target">Manager.unregister(도착)</option>
+        </select>
+      </label>
+      <button id="recreate">목록 다시 등록</button>
+    </div>
+    <div class="board">
+      <ul id="s1" class="list"><li data-id="a">a</li><li data-id="b">b</li><li data-id="c">c</li></ul>
+      <ul id="s2" class="list"><li data-id="d">d</li><li data-id="e">e</li></ul>
+    </div>
+    <ul id="log"></ul>
+
+    <h3>2. 도착 목록과 호환되지 않는 항목 (draggable: .a / .b)</h3>
+    <div class="toolbar">
+      <button id="apiAB">API: x → B</button>
+      <button id="makeB">x 에 class b 추가</button>
+      <span id="status2"></span>
+    </div>
+    <div class="board">
+      <ul id="la" class="list"><li class="a" data-id="x">x (.a)</li><li class="a" data-id="x2">x2 (.a)</li></ul>
+      <ul id="lb" class="list"><li class="b" data-id="y">y (.b)</li></ul>
+    </div>
+
+    <script type="module">
+      import '/style/daracl.sortable.scss';
+      import { createSortableManager, Sortable } from '/src/sortable.ts';
+
+      const $ = (id) => document.getElementById(id);
+      const log = (text) => {
+        const li = document.createElement('li');
+        li.textContent = text;
+        $('log').prepend(li);
+      };
+
+      // 1. onMove 안전성
+      const m1 = createSortableManager();
+      const register = (id, el) =>
+        m1.register(id, el, {
+          animation: 120,
+          onMove: (e) => {
+            const action = $('action').value;
+            if (action === 'none') return;
+            if (action === 'cancel') m1.get(id)?.cancel();
+            else if (action === 'destroy') m1.get(id)?.destroy();
+            else if (e.to !== e.from) m1.unregister(m1.getIdOf(e.to));
+          },
+        });
+      const registerAll = () => {
+        if (!m1.has('s1')) register('s1', $('s1'));
+        if (!m1.has('s2')) register('s2', $('s2'));
+      };
+      registerAll();
+      ['sort', 'end', 'itemTransfer'].forEach((name) =>
+        m1.on(name, (e) => log(`${name} ${e.containerId ?? `${e.from}→${e.to}`}${e.event?.cancelled ? ' (cancelled)' : ''}`)),
+      );
+      $('recreate').onclick = registerAll;
+
+      // 2. 호환되지 않는 항목
+      const m2 = createSortableManager();
+      m2.register('a', '#la', { animation: 120, draggable: '.a' });
+      m2.register('b', '#lb', { animation: 120, draggable: '.b' });
+      $('apiAB').onclick = () => {
+        const r = m2.transferItem({ from: 'a', to: 'b', itemId: 'x' });
+        $('status2').textContent = r.moved ? `이동 (newIndex ${r.newIndex})` : `거절: ${r.reason}`;
+      };
+      $('makeB').onclick = () => document.querySelector('[data-id="x"]').classList.add('b');
+
+      window.m1 = m1;
+      window.m2 = m2;
+      window.SortableStatic = Sortable;
+      window.ready = true;
+    </script>
+  </body>
+</html>

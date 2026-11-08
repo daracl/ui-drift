@@ -57,7 +57,7 @@ ui-drift/
 │  │       ├─ GeometryStyle.ts      data-x/y/w/h 위치 CSS 규칙 생성기 (같은 설정의 에디터끼리 시트 공유, data-ddr-geo)
 │  │       ├─ History.ts            undo/redo 스택
 │  │       └─ classNames.ts         CSS 클래스 상수 (style/_editor.scss 와 일치)
-│  └─ sortable/    Sortable 본체 (Drift 를 import 하지 않는다). types.d.ts 는 @/sortable/types
+│  └─ sortable/    Sortable 본체와 SortableManager(여러 목록 관리, docs/SORTABLE.md) (Drift 를 import 하지 않는다). types.d.ts 는 @/sortable/types
 ├─ style/   daracl.drift.scss(Editor), daracl.drift.viewer.scss(선택), _editor.scss, _variables.scss
 ├─ test/    core, viewer, editor(jsdom), build(dist 산출물 검사)
 ├─ e2e/     Playwright 스펙 + helpers.ts
@@ -161,16 +161,19 @@ types → core → viewer
 | `npm run typecheck` / `npm run lint` | `tsc --noEmit` / `eslint "src/**/*.ts"` |
 | `npm run build` | dist 정리 후 ESM/CJS(`index/core/viewer`), UMD, CSS, d.ts 병렬 생성 |
 | `npm run check:dts` | `dist/**/*.d.ts` 에 내부 별칭(`@t/*`, `@/*`)이 남았거나 상대 import 가 해석되지 않으면 실패 (`build:tsc` 의 마지막 단계로도 실행됨) |
-| `npm run example` | `dist` 가 있을 때 `example/viewer.html|css` 생성 (JS 없는 Viewer) |
+| `npm run example` | `dist` 가 있을 때 `example/viewer.html|css`, `example/fit.html|css` 생성 (JS 없는 Viewer). Viewer 출력이 바뀌면 다시 실행해 함께 커밋한다. `node scripts/build-example.mjs --check` 는 쓰지 않고 차이만 검사하며 `test/build/exampleFresh.test.ts` 가 같은 검사를 한다 |
 | `npm test` | Jest. `test/build/*` 는 `dist/` 가 있어야 실행되고 없으면 skip 된다 → 빌드 후 실행할 것 |
 | `npm run pwtest` | Playwright 전체 (webServer 로 `vite.config.dev.mjs` 자동 기동, 포트 5179) |
 | `npx playwright test e2e/<file>` | 단일 스펙. `--repeat-each=3` 로 불안정 테스트 확인 |
 | `npm run docs:gen` | typedoc → `docs/api/` (git 제외) |
-| `npm run check` | typecheck + lint + test |
+| `npm run format` / `npm run format:check` | Prettier 로 정리 / 검사 (src, test, e2e, scripts, 루트 설정 파일) |
+| `npm run check` | typecheck + lint + format:check + test |
 
 권장 검증 순서: `typecheck` → `lint` → `build` → `npx jest` → `npx playwright test`. 코드를 고친 뒤 `dist` 를 쓰는 테스트(`test/build`, `example`)는 반드시 `npm run build` 를 다시 실행한다.
 
 테스트 구성: Jest(jsdom) 는 레이아웃을 계산하지 않으므로 `editor.test.ts` 가 `getBoundingClientRect` 를 data 속성 기반으로 모킹한다. 실제 위치·반응형·터치·JS 비활성·CSP 는 Playwright 가 검증한다(JS 비활성은 `javaScriptEnabled:false` 컨텍스트, 터치는 CDP `Input.dispatchTouchEvent`). 애니메이션(0.15s) 도중 좌표를 읽으면 불안정하므로 `expect.poll` 이나 대기를 쓴다.
+
+저장소 안에서 `dist/*.js`(ESM)를 Node 로 직접 import 하면 `MODULE_TYPELESS_PACKAGE_JSON` 경고가 나온다(package.json 에 `type` 이 없어 CJS 로 먼저 해석). npm pack 으로 설치한 외부 프로젝트(node_modules)에서는 경고 없이 ESM/CJS 모두 동작함을 확인했다. `"type": "module"` 을 넣으면 CJS 청크(`*.js`)와 `.d.ts` 형식이 바뀌어 require/node16 CJS 소비자가 깨지고, 진입점을 `.mjs` 로 바꾸면 공개 dist 파일명이 바뀌므로 하지 않는다.
 
 ### 배포 타입 선언(d.ts) 규칙
 

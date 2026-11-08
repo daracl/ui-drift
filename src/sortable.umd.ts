@@ -1,4 +1,4 @@
-import { createSortable, Sortable } from './sortable';
+import { createSortable, createSortableManager, Sortable, SortableManager } from './sortable';
 
 // 브라우저 전역에 등록 (window.Daracl.sortable)
 declare global {
@@ -9,5 +9,5 @@ declare global {
 
 if (typeof window !== 'undefined') {
   window.Daracl = window.Daracl || {};
-  window.Daracl.sortable = { Sortable, createSortable };
+  window.Daracl.sortable = { Sortable, createSortable, SortableManager, createSortableManager };
 }

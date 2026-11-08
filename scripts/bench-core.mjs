@@ -13,14 +13,16 @@ const BUDGET_MS = Number(process.env.BENCH_BUDGET_MS || 20000); // 한 번 실�
 /** 재현 가능한 난수 */
 function rng(seed) {
   let s = seed >>> 0;
-  return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 0x100000000);
+  return () => (s = (s * 1664525 + 1013904223) >>> 0) / 0x100000000;
 }
 
 const SHAPES = {
   /** 이미 빽빽하게 정렬된 레이아웃: 압축해도 변하지 않는다 (가장 흔한 편집 상태) */
-  dense: (n) => Array.from({ length: n }, (_, i) => ({ id: `i${i}`, x: (i % 4) * 3, y: Math.floor(i / 4) * 2, w: 3, h: 2 })),
+  dense: (n) =>
+    Array.from({ length: n }, (_, i) => ({ id: `i${i}`, x: (i % 4) * 3, y: Math.floor(i / 4) * 2, w: 3, h: 2 })),
   /** 위쪽이 비어 있는 레이아웃: 모든 항목이 한 행씩 위로 올라가야 한다 (y 가 큰 항목의 압축 비용) */
-  tall: (n) => Array.from({ length: n }, (_, i) => ({ id: `i${i}`, x: (i % 4) * 3, y: 200 + Math.floor(i / 4) * 4, w: 3, h: 2 })),
+  tall: (n) =>
+    Array.from({ length: n }, (_, i) => ({ id: `i${i}`, x: (i % 4) * 3, y: 200 + Math.floor(i / 4) * 4, w: 3, h: 2 })),
   /** 임의 크기/위치가 섞인 겹침 없는 레이아웃 (add 로 쌓아 만든다) */
   mixed: (n) => {
     const r = rng(42);
@@ -57,7 +59,8 @@ const cases = {
   'compact (전체 압축)': (items) => () => compact(items, undefined, false),
   'compact float (위로 올리지 않음)': (items) => () => compact(items, undefined, true),
   'moveItem (맨 앞 항목을 끝으로, 충돌 재배치)': (items) => () => moveItem(items, COLUMNS, items[0].id, 9, 9999, false),
-  'moveItem (중간 항목을 (0,0)으로)': (items) => () => moveItem(items, COLUMNS, items[items.length >> 1].id, 0, 0, false),
+  'moveItem (중간 항목을 (0,0)으로)': (items) => () =>
+    moveItem(items, COLUMNS, items[items.length >> 1].id, 0, 0, false),
   'resizeItem (맨 앞 항목 확대)': (items) => () => resizeItem(items, COLUMNS, items[0].id, 6, 6, false),
   'addItem (빈 자리 자동 배치)': (items) => () => addItem(items, COLUMNS, { id: 'new', w: 3, h: 2 }, false),
   'normalizeItems (불러오기)': (items) => () => normalizeItems(items, COLUMNS, false),
@@ -98,7 +101,11 @@ for (const r of results) (byCase[`${r.shape} / ${r.case}`] ||= {})[r.n] = r;
 console.log(`\n환경: ${env.node}, ${env.cpu} x${env.cores}`);
 console.log(['케이스', ...SIZES.map((n) => `n=${n}`)].join('\t'));
 for (const [k, row] of Object.entries(byCase)) {
-  console.log([k, ...SIZES.map((n) => (row[n].skipped ? '(생략)' : row[n].capped ? `>${BUDGET_MS}ms` : `${row[n].ms}ms`))].join('\t'));
+  console.log(
+    [k, ...SIZES.map((n) => (row[n].skipped ? '(생략)' : row[n].capped ? `>${BUDGET_MS}ms` : `${row[n].ms}ms`))].join(
+      '\t',
+    ),
+  );
 }
 
 if (process.argv[2]) fs.writeFileSync(process.argv[2], JSON.stringify({ env, results }, null, 2));

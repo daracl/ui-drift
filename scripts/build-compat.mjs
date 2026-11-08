@@ -35,7 +35,10 @@ export function buildCompat(dist = join(root, 'dist')) {
   for (const source of sources) {
     if (!existsSync(source)) continue;
     const legacy = join(dist, relative(drift, source)); // 예전 위치
-    const target = relative(dirname(legacy), source).split(sep).join(posix.sep).replace(/\.d\.ts$/, '');
+    const target = relative(dirname(legacy), source)
+      .split(sep)
+      .join(posix.sep)
+      .replace(/\.d\.ts$/, '');
     mkdirSync(dirname(legacy), { recursive: true });
     writeFileSync(legacy, `export * from '${target.startsWith('.') ? target : `./${target}`}';\n`);
     count += 1;

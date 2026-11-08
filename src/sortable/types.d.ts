@@ -135,3 +135,71 @@ export interface SortableOptions {
   /** 드래그가 끝났을 때 (출발 목록에서 호출) */
   onEnd?: (evt: SortableEvent) => void;
 }
+
+/** `createSortableManager(options)` 옵션 */
+export interface SortableManagerOptions {
+  /**
+   * 등록된 목록 사이에서 항목을 끌어 옮길 수 있게 한다 (기본 true). false 면 각 목록 안의 정렬만 된다.
+   * 목록별 pull/put 규칙(register 의 options.group)은 그대로 적용된다. `setCrossContainer()` 로 런타임 변경.
+   * API 이동(transferItem)은 이 옵션과 무관하다.
+   */
+  crossContainer?: boolean;
+}
+
+/** 여러 목록의 순서 저장 포맷 */
+export interface SortableContainerData {
+  version: 1;
+  /** 등록 순서. order 는 각 목록 항목의 dataIdAttr 값 순서 */
+  containers: { id: string; order: string[] }[];
+}
+
+/** `SortableManager.transferItem()` 요청 */
+export interface SortableTransferRequest {
+  /** 출발 목록 id */
+  from: string;
+  /** 도착 목록 id */
+  to: string;
+  /** 출발 목록에서 옮길 항목의 dataIdAttr 값 */
+  itemId: string;
+  /** 도착 목록에서의 위치 (draggable 항목 기준, 0 이상 정수). 생략하면 맨 뒤 */
+  index?: number;
+}
+
+/**
+ * 이동 거절 사유
+ * - destroyed: Manager 가 destroy 됨 · busy: 드래그 중이거나 다른 이동을 처리하는 중
+ * - missing-container: 등록되지 않은 목록 · same-container: 출발과 도착이 같음
+ * - missing-item: 출발 목록에 그 id 의 항목이 없음 · duplicate-item: 출발 목록에 같은 id 의 항목이 여럿
+ * - disconnected: 목록이 문서에 연결되어 있지 않음
+ * - incompatible-item: 도착 목록이 그 항목을 관리할 수 없음. 도착 목록 자식 자리에서 draggable 에 맞지 않거나,
+ *   도착 목록의 dataIdAttr 로 같은 itemId 를 읽을 수 없음 (항목의 class/속성은 바꾸지 않는다)
+ */
+export type SortableTransferRejectReason =
+  | 'destroyed'
+  | 'busy'
+  | 'missing-container'
+  | 'same-container'
+  | 'missing-item'
+  | 'duplicate-item'
+  | 'disconnected'
+  | 'incompatible-item';
+
+export type SortableTransferResult =
+  | { moved: true; from: string; to: string; item: HTMLElement; oldIndex: number; newIndex: number }
+  | { moved: false; reason: SortableTransferRejectReason };
+
+/** Manager `itemTransfer` 이벤트 데이터 */
+export interface SortableItemTransferEvent {
+  from: string;
+  to: string;
+  /** 도착 목록에 들어간 항목 */
+  item: HTMLElement;
+  /** 항목의 dataIdAttr 값 (없으면 빈 문자열) */
+  itemId: string;
+  oldIndex: number;
+  newIndex: number;
+  /** move: 이동, clone: pull:'clone' 이라 출발 목록에 복제본이 남음 */
+  mode: 'move' | 'clone';
+  /** 포인터 드래그는 'user', transferItem 은 'api' (기본) */
+  source: 'user' | 'api';
+}

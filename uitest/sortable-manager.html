@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SortableManager</title>
+    <style>
+      body { font-family: system-ui, sans-serif; padding: 12px; margin: 0; font-size: 13px; background: #f3f4f6; }
+      h3 { margin: 0 0 8px; }
+      .toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
+      .toolbar button, .toolbar select, .toolbar input { min-height: 30px; padding: 0 8px; }
+      .board { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+      .col { width: 190px; background: #fff; border: 2px solid #cbd5e1; border-radius: 8px; padding: 6px; }
+      .col[data-active] { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15); }
+      .col h4 { margin: 2px 4px 6px; display: flex; justify-content: space-between; align-items: center; }
+      .col h4 button { font-size: 11px; }
+      .list { min-height: 44px; margin: 0; padding: 4px; list-style: none; background: #f8fafc; border-radius: 6px; }
+      .list > li { background: #fff; border: 1px solid #d0d7de; border-radius: 6px; padding: 8px 10px; margin: 4px 0; }
+      .list > li .grip { color: #94a3b8; margin-right: 4px; }
+      .other { opacity: 0.85; border-style: dashed; }
+      aside { margin-top: 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+      aside section { background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; }
+      aside h4 { margin: 0 0 6px; }
+      textarea { width: 100%; box-sizing: border-box; height: 120px; font-family: monospace; font-size: 11px; }
+      #events { height: 160px; overflow: auto; margin: 0; padding: 0; list-style: none; font-family: monospace; font-size: 11px; }
+      #status { min-height: 1.4em; color: #475569; word-break: break-all; }
+      #status.error { color: #dc2626; }
+      label.block { display: block; margin: 3px 0; }
+    </style>
+  </head>
+  <body>
+    <h3>SortableManager — 여러 목록 관리 <a href="/uitest/index.html" style="font-size: 12px">← 목록</a></h3>
+    <div class="toolbar">
+      <label><input type="checkbox" id="cross" checked /> 목록 간 이동</label>
+      <b id="crossState">켜짐</b>
+      <span style="width: 12px"></span>
+      <button id="unregisterDone">done 등록 해제</button>
+      <button id="reRegister">다시 등록</button>
+      <span>활성: <b id="activeId">-</b></span>
+    </div>
+
+    <div class="board">
+      <div class="col" data-col="palette">
+        <h4>palette <small>(복제만, 받지 않음)</small></h4>
+        <ul class="list" id="palette">
+          <li data-id="tpl-bug">🐞 Bug</li>
+          <li data-id="tpl-task">✅ Task</li>
+        </ul>
+      </div>
+      <div class="col" data-col="todo">
+        <h4>todo</h4>
+        <ul class="list" id="todo">
+          <li data-id="t1"><span class="grip">⠿</span>Write spec</li>
+          <li data-id="t2"><span class="grip">⠿</span>Design API</li>
+          <li data-id="t3"><span class="grip">⠿</span>Review</li>
+        </ul>
+      </div>
+      <div class="col" data-col="doing">
+        <h4>doing</h4>
+        <ul class="list" id="doing">
+          <li data-id="d1"><span class="grip">⠿</span>Implement</li>
+        </ul>
+      </div>
+      <div class="col" data-col="done">
+        <h4>done</h4>
+        <ul class="list" id="done"></ul>
+      </div>
+      <div class="col other" data-col="other">
+        <h4>다른 Manager</h4>
+        <ul class="list" id="other">
+          <li data-id="o1">Other 1</li>
+          <li data-id="o2">Other 2</li>
+        </ul>
+      </div>
+    </div>
+
+    <aside>
+      <section>
+        <h4>API 이동 (transferItem)</h4>
+        <label class="block">항목 <select id="trItem"></select></label>
+        <label class="block">대상 <select id="trTo"></select></label>
+        <label class="block">위치(index, 비우면 맨 뒤) <input id="trIndex" type="number" min="0" style="width: 70px" /></label>
+        <button id="trRun">이동</button>
+        <div id="status"></div>
+      </section>
+      <section>
+        <h4>순서 저장 / 복원</h4>
+        <div class="toolbar">
+          <button id="save">저장</button>
+          <button id="restore">복원</button>
+          <label><input type="checkbox" id="ignoreUnknown" /> 미등록/없는 항목 무시</label>
+        </div>
+        <textarea id="json" aria-label="orders json"></textarea>
+      </section>
+      <section>
+        <h4>이벤트 <button id="clearEvents" style="float: right">지우기</button></h4>
+        <ul id="events"></ul>
+      </section>
+    </aside>
+
+    <script type="module">
+      import '/style/daracl.sortable.scss';
+      import { createSortableManager, Sortable, SortableManager } from '/src/sortable.ts';
+
+      const $ = (id) => document.getElementById(id);
+      const manager = createSortableManager();
+      // 이 Manager 와 섞이지 않는 별도 Manager
+      const other = createSortableManager();
+      other.register('other', '#other', { animation: 150 });
+      window.sm = manager;
+      window.otherManager = other;
+      window.SortableApi = { Sortable, SortableManager, createSortableManager };
+
+      let seq = 0;
+      const registerAll = () => {
+        if (!manager.has('palette'))
+          manager.register('palette', '#palette', {
+            group: { pull: 'clone', put: false },
+            sort: false,
+          });
+        if (!manager.has('todo')) manager.register('todo', '#todo', { handle: '.grip' });
+        if (!manager.has('doing')) manager.register('doing', '#doing', { handle: '.grip' });
+        if (!manager.has('done')) manager.register('done', '#done', {});
+        render();
+      };
+
+      const status = (text, error = false) => {
+        $('status').textContent = text;
+        $('status').classList.toggle('error', error);
+      };
+      const log = (text) => {
+        const li = document.createElement('li');
+        li.textContent = text;
+        $('events').prepend(li);
+      };
+
+      function render() {
+        const active = manager.getActiveId();
+        $('activeId').textContent = active ?? '-';
+        document.querySelectorAll('.col').forEach((c) => c.toggleAttribute('data-active', c.dataset.col === active));
+        const item = $('trItem');
+        const to = $('trTo');
+        const keepItem = item.value;
+        const keepTo = to.value;
+        item.textContent = '';
+        to.textContent = '';
+        for (const { id, sortable } of manager.getAll()) {
+          for (const key of sortable.toArray()) item.add(new Option(`${id} / ${key}`, JSON.stringify([id, key])));
+          to.add(new Option(id, id));
+        }
+        if ([...item.options].some((o) => o.value === keepItem)) item.value = keepItem;
+        if ([...to.options].some((o) => o.value === keepTo)) to.value = keepTo;
+      }
+
+      manager.on('containerRegistered', ({ containerId }) => log(`registered ${containerId}`));
+      manager.on('containerUnregistered', ({ containerId }) => {
+        log(`unregistered ${containerId}`);
+        render();
+      });
+      manager.on('activeChange', ({ previousId, containerId }) => {
+        log(`active ${previousId} → ${containerId}`);
+        render();
+      });
+      manager.on('sort', ({ containerId }) => {
+        log(`sort ${containerId}`);
+        render();
+      });
+      manager.on('end', ({ containerId, event }) => log(`end ${containerId}${event.cancelled ? ' (cancelled)' : ''}`));
+      manager.on('itemTransfer', ({ from, to, item, itemId, oldIndex, newIndex, mode, source }) => {
+        // 팔레트에서 복제해 온 항목은 템플릿과 id 가 겹치지 않게 이동이 확정된 뒤 새 id 를 준다
+        if (mode === 'clone') item.dataset.id = `${itemId}-${++seq}`;
+        log(`itemTransfer ${from}→${to} ${itemId} ${oldIndex}→${newIndex} ${mode} ${source}`);
+        render();
+      });
+
+      $('cross').onchange = (e) => {
+        manager.setCrossContainer(e.target.checked);
+        $('crossState').textContent = manager.isCrossContainer() ? '켜짐' : '꺼짐';
+      };
+      $('unregisterDone').onclick = () => manager.unregister('done');
+      $('reRegister').onclick = registerAll;
+      $('trRun').onclick = () => {
+        if (!$('trItem').value) return;
+        const [from, itemId] = JSON.parse($('trItem').value);
+        const req = { from, to: $('trTo').value, itemId };
+        if ($('trIndex').value !== '') req.index = Number($('trIndex').value);
+        try {
+          const r = manager.transferItem(req, { animate: true });
+          status(r.moved ? `이동: ${r.from} → ${r.to} (${r.oldIndex} → ${r.newIndex})` : `거절: ${r.reason}`, !r.moved);
+        } catch (err) {
+          status(err.message, true);
+        }
+      };
+      $('save').onclick = () => {
+        $('json').value = manager.toJSON(2);
+        status('저장');
+      };
+      $('restore').onclick = () => {
+        try {
+          const ids = manager.fromJSON($('json').value, { unknown: $('ignoreUnknown').checked ? 'ignore' : 'error' });
+          status(`복원: ${ids.join(', ')}`);
+          render();
+        } catch (err) {
+          status(err.message, true);
+        }
+      };
+      $('clearEvents').onclick = () => ($('events').textContent = '');
+
+      registerAll();
+      window.ready = true;
+    </script>
+  </body>
+</html>

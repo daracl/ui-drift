@@ -10,7 +10,7 @@ GridStack 스타일의 Drag & Drop 레이아웃 모듈. **Editor** 는 JavaScrip
 
 설계 상세는 [docs/DESIGN.md](docs/DESIGN.md), API 는 [docs/API.md](docs/API.md) 를 본다.
 
-같은 패키지에 목록 정렬용 **Sortable** 도 들어 있다(`@daracl/drift/sortable`, Drift 와 독립). 사용법은 [docs/SORTABLE.md](docs/SORTABLE.md) 를 본다.
+같은 패키지에 목록 정렬용 **Sortable** 도 들어 있다(`@daracl/drift/sortable`, Drift 와 독립). 여러 목록을 하나로 관리하는 `createSortableManager()`(칸반 보드처럼 목록 간 이동 범위 격리, API 이동, 전체 순서 저장·복원)도 제공한다. 사용법은 [docs/SORTABLE.md](docs/SORTABLE.md) 를 본다.
 
 ## 설치 / 빌드
 
