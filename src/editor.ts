@@ -6,6 +6,7 @@ export type {
   DriftManagerDropResult,
   DriftManagerEvents,
   DriftManagerLoadOptions,
+  DriftManagerRegisterOptions,
 } from './drift/editor/DriftManager';
 export type {
   DriftItemTransferEvent,

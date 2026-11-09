@@ -107,7 +107,17 @@ export interface DriftContainerLayout {
   /** 컨테이너 id (항목 id 와 별개. 서로 다른 컨테이너는 같은 항목 id 를 써도 된다) */
   id: string;
   layout: DriftLayout;
+  /**
+   * Viewer `fitHeight` 에서의 컨테이너 높이 방식 (`renderContainersViewer`).
+   * - 'auto': 고정 컨테이너를 뺀 나머지 높이를 auto 컨테이너끼리 행 수 비율로 나눠 채운다.
+   * - 생략: 고정 높이. 행 수 × rowHeight (+ 행 사이 gap) 로 정해진다.
+   * auto 컨테이너가 하나도 없으면 모든 컨테이너를 auto 로 본다.
+   */
+  height?: DriftContainerHeight;
 }
+
+/** 컨테이너 높이 방식. 현재는 'auto' 만 있고 생략하면 고정(행 수 × rowHeight) 높이다 */
+export type DriftContainerHeight = 'auto';
 
 /** 여러 컨테이너의 레이아웃 저장 포맷. 각 layout 은 단일 에디터의 DriftLayout 과 같다 */
 export interface DriftContainerData {

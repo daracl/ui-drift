@@ -12,7 +12,7 @@ import type {
   DriftDragInSource,
   DriftEditorOptions,
 } from '@t/DriftEditor';
-import type { DriftContainerData, DriftItem, DriftLayout } from '@t/DriftLayout';
+import type { DriftContainerData, DriftContainerHeight, DriftItem, DriftLayout } from '@t/DriftLayout';
 import type {
   DriftItemTransferEvent,
   DriftManagerOptions,
@@ -42,6 +42,15 @@ export interface DriftManagerDragInOptions extends Omit<DriftDragInOptions, 'onD
    * 정리 순서와 autoAdd 의미는 `DriftEditor.setupDragIn()` 과 같다.
    */
   onDrop?: (result: DriftManagerDropResult) => void;
+}
+
+/** `register()` 옵션. 에디터 옵션에 컨테이너 자체의 속성이 더해진다 */
+export interface DriftManagerRegisterOptions extends DriftEditorOptions {
+  /**
+   * Viewer fitHeight 에서의 컨테이너 높이 방식. 'auto' 면 남은 높이를 행 수 비율로 나눠 채우고, 생략하면 고정 높이다.
+   * `getLayouts()`/`toJSON()` 에 함께 저장된다 (`renderContainersViewer` 가 사용). `fromJSON()` 은 바꾸지 않는다.
+   */
+  height?: DriftContainerHeight;
 }
 
 /** `fromJSON()` 옵션 */
@@ -89,6 +98,8 @@ interface Entry {
   id: string;
   editor: DriftEditor;
   container: HTMLElement;
+  /** Viewer fitHeight 높이 방식 (생략 = 고정) */
+  height?: DriftContainerHeight;
   /** 컨테이너에 붙인 리스너(활성 감지) 해제용 */
   abort: AbortController;
   /** layoutChange 전달 리스너 해제 함수 (Manager 에 layoutChange 리스너가 있을 때만 붙는다) */
@@ -158,7 +169,7 @@ export class DriftManager {
    * @param container 요소 또는 CSS selector (`createDriftEditor` 와 같은 규칙)
    * @param options 이 에디터에만 적용되는 옵션
    */
-  register(id: string, container: HTMLElement | string, options: DriftEditorOptions = {}): DriftEditor {
+  register(id: string, container: HTMLElement | string, options: DriftManagerRegisterOptions = {}): DriftEditor {
     if (this.destroyed) throw new Error('[drift] 이미 destroy 된 manager 입니다.');
     assertContainerId(id);
     if (this.entries.has(id)) throw new Error(`[drift] 이미 등록된 컨테이너 id 입니다: ${id}`);
@@ -169,9 +180,10 @@ export class DriftManager {
     // 같은 요소에 에디터가 겹치면 DOM/리스너가 섞이므로 금지한다 (다른 Manager 나 createDriftEditor 로 만든 경우 포함)
     if (getEditorOf(el)) throw new Error(`[drift] 이미 에디터가 사용 중인 컨테이너입니다: ${id}`);
 
+    const { height, ...editorOptions } = options;
     let editor: DriftEditor;
     try {
-      editor = new DriftEditor(el, options);
+      editor = new DriftEditor(el, editorOptions);
     } catch (e) {
       // 생성 도중(초기 렌더링 등) 실패하면 만들어진 리소스를 정리하고 등록하지 않는다
       const partial = getEditorOf(el);
@@ -188,6 +200,7 @@ export class DriftManager {
       id,
       editor,
       container: el,
+      height: height === 'auto' ? 'auto' : undefined,
       abort,
       // 에디터가 직접 destroy 되면 등록만 정리한다 (에디터는 이미 해제 중)
       offDestroy: editor.on('destroy', () => this.remove(entry, false)),
@@ -246,6 +259,22 @@ export class DriftManager {
 
   has(id: string): boolean {
     return this.entries.has(id);
+  }
+
+  /** 컨테이너의 Viewer fitHeight 높이 방식. 고정 높이거나 등록되지 않았으면 undefined */
+  getContainerHeight(id: string): DriftContainerHeight | undefined {
+    return this.entries.get(id)?.height;
+  }
+
+  /**
+   * 컨테이너의 Viewer fitHeight 높이 방식을 바꾼다 ('auto' 또는 undefined = 고정). 편집 화면과 이력에는 영향이 없고
+   * 이후 `getLayouts()`/`toJSON()` 결과에 반영된다. 등록되지 않은 id 면 false.
+   */
+  setContainerHeight(id: string, height: DriftContainerHeight | undefined): boolean {
+    const entry = this.entries.get(id);
+    if (!entry) return false;
+    entry.height = height === 'auto' ? 'auto' : undefined;
+    return true;
   }
 
   /** 등록 순서의 컨테이너 id 목록 */
@@ -578,7 +607,11 @@ export class DriftManager {
   getLayouts(): DriftContainerData {
     return {
       version: CONTAINER_DATA_VERSION,
-      containers: Array.from(this.entries.values(), (e) => ({ id: e.id, layout: e.editor.getLayout() })),
+      containers: Array.from(this.entries.values(), (e) =>
+        e.height
+          ? { id: e.id, layout: e.editor.getLayout(), height: e.height }
+          : { id: e.id, layout: e.editor.getLayout() },
+      ),
     };
   }
 

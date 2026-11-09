@@ -1,142 +1,330 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ui-drift multi container</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 12px;
+        font-family: system-ui, sans-serif;
+        background: #f3f4f6;
+        font-size: 13px;
+      }
+      h3 {
+        margin: 0 0 8px;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 1fr 260px;
+        gap: 12px;
+        align-items: start;
+      }
+      @media (max-width: 800px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+      }
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      .toolbar button,
+      .toolbar select,
+      .toolbar input {
+        min-height: 32px;
+        padding: 0 10px;
+      }
+      .palette {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 8px;
+        padding: 8px;
+        background: #fff;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+      }
+      .palette .title {
+        width: 100%;
+        font-weight: 600;
+        color: #475569;
+      }
+      .pal,
+      .pal-ext {
+        padding: 10px 14px;
+        background: #fff;
+        border: 1px solid #94a3b8;
+        border-radius: 6px;
+      }
+      .pal-ext {
+        border-style: dashed;
+        border-color: #2563eb;
+      }
+      .containers {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .box {
+        background: #fff;
+        border: 2px solid #cbd5e1;
+        border-radius: 8px;
+      }
+      .box[data-active] {
+        border-color: #2563eb;
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+      }
+      .box-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 8px;
+        border-bottom: 1px solid #e2e8f0;
+      }
+      .box-head .cid {
+        font-weight: 600;
+        margin-right: auto;
+      }
+      .box-head .cid small {
+        font-weight: 400;
+        color: #64748b;
+      }
+      .box-head button,
+      .box-head select {
+        min-height: 28px;
+        padding: 0 8px;
+      }
+      .box-body {
+        padding: 0;
+      }
+      aside {
+        position: sticky;
+        top: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      aside section {
+        background: #fff;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        padding: 8px;
+      }
+      aside h4 {
+        margin: 0 0 6px;
+      }
+      #list {
+        margin: 0;
+        padding-left: 18px;
+      }
+      #list li[data-active] {
+        font-weight: 600;
+        color: #2563eb;
+      }
+      #events {
+        height: 220px;
+        overflow: auto;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        font-family: monospace;
+        font-size: 11px;
+      }
+      #events li {
+        border-bottom: 1px solid #f1f5f9;
+        padding: 2px 0;
+      }
+      textarea {
+        width: 100%;
+        box-sizing: border-box;
+        height: 140px;
+        font-family: monospace;
+        font-size: 11px;
+      }
+      #status {
+        color: #475569;
+        min-height: 1.4em;
+      }
+      #status.error {
+        color: #dc2626;
+      }
+      .transfer label {
+        display: block;
+        margin: 4px 0;
+      }
+      .transfer select,
+      .transfer input[type='text'],
+      .transfer input[type='number'] {
+        width: 100%;
+        box-sizing: border-box;
+        min-height: 28px;
+      }
+      .transfer .xy {
+        display: flex;
+        gap: 6px;
+      }
+      #trResult {
+        font-family: monospace;
+        font-size: 11px;
+        min-height: 1.4em;
+        word-break: break-all;
+      }
+      #trResult.error {
+        color: #dc2626;
+      }
+      .hint {
+        color: #64748b;
+        font-size: 11px;
+        line-height: 1.4;
+      }
+      #list small {
+        color: #64748b;
+        font-weight: 400;
+      }
+    </style>
+  </head>
 
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ui-drift multi container</title>
-  <style>
-    body { margin: 0; padding: 12px; font-family: system-ui, sans-serif; background: #f3f4f6; font-size: 13px; }
-    h3 { margin: 0 0 8px; }
-    .layout { display: grid; grid-template-columns: 1fr 260px; gap: 12px; align-items: start; }
-    @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
-    .toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
-    .toolbar button, .toolbar select, .toolbar input { min-height: 32px; padding: 0 10px; }
-    .palette { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; padding: 8px; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; }
-    .palette .title { width: 100%; font-weight: 600; color: #475569; }
-    .pal, .pal-ext { padding: 10px 14px; background: #fff; border: 1px solid #94a3b8; border-radius: 6px; }
-    .pal-ext { border-style: dashed; border-color: #2563eb; }
-    .containers { display: flex; flex-direction: column; gap: 12px; }
-    .box { background: #fff; border: 2px solid #cbd5e1; border-radius: 8px; }
-    .box[data-active] { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15); }
-    .box-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid #e2e8f0; }
-    .box-head .cid { font-weight: 600; margin-right: auto; }
-    .box-head .cid small { font-weight: 400; color: #64748b; }
-    .box-head button, .box-head select { min-height: 28px; padding: 0 8px; }
-    .box-body { padding: 0; }
-    aside { position: sticky; top: 12px; display: flex; flex-direction: column; gap: 8px; }
-    aside section { background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; }
-    aside h4 { margin: 0 0 6px; }
-    #list { margin: 0; padding-left: 18px; }
-    #list li[data-active] { font-weight: 600; color: #2563eb; }
-    #events { height: 220px; overflow: auto; margin: 0; padding: 0; list-style: none; font-family: monospace; font-size: 11px; }
-    #events li { border-bottom: 1px solid #f1f5f9; padding: 2px 0; }
-    textarea { width: 100%; box-sizing: border-box; height: 140px; font-family: monospace; font-size: 11px; }
-    #status { color: #475569; min-height: 1.4em; }
-    #status.error { color: #dc2626; }
-    .transfer label { display: block; margin: 4px 0; }
-    .transfer select, .transfer input[type=text], .transfer input[type=number] { width: 100%; box-sizing: border-box; min-height: 28px; }
-    .transfer .xy { display: flex; gap: 6px; }
-    #trResult { font-family: monospace; font-size: 11px; min-height: 1.4em; word-break: break-all; }
-    #trResult.error { color: #dc2626; }
-    .hint { color: #64748b; font-size: 11px; line-height: 1.4; }
-    #list small { color: #64748b; font-weight: 400; }
-  </style>
-</head>
+  <body>
+    <h3>ui-drift 여러 컨테이너 (DriftManager)</h3>
+    <div class="toolbar">
+      <label>새 컨테이너 id <input id="newId" value="extra-1" size="10" /></label>
+      <label>컬럼 <input id="newCols" type="number" value="8" min="1" max="48" style="width: 60px" /></label>
+      <button id="addContainer">컨테이너 추가</button>
+      <button id="removeAll">모든 컨테이너 제거</button>
+      <button id="reRegister">기본 3개 재등록</button>
+      <span style="width: 12px"></span>
+      <button id="activeUndo">활성 undo</button>
+      <button id="activeRedo">활성 redo</button>
+      <button id="activeAdd">활성에 항목 추가</button>
+      <span style="width: 12px"></span>
+      <label><input type="checkbox" id="crossDrag" /> 컨테이너 간 이동 (마우스·터치)</label>
+      <b id="crossState">꺼짐</b>
+    </div>
+    <div class="palette" id="palette">
+      <span class="title">공통 팔레트 — 아래 아무 컨테이너로 끌어다 놓으세요</span>
+      <div class="pal" data-w="3" data-h="2" data-title="Chart" data-content="New chart">+ Chart (3x2)</div>
+      <div class="pal" data-w="4" data-h="2" data-title="Table" data-content="New table">+ Table (4x2)</div>
+      <div class="pal" data-w="2" data-h="1">+ Small (2x1)</div>
+      <div class="pal-ext" data-w="2" data-h="2" data-title="External" data-content="외부 모델">
+        + External (autoAdd:false)
+      </div>
+    </div>
 
-<body>
-  <h3>ui-drift 여러 컨테이너 (DriftManager)</h3>
-  <div class="toolbar">
-    <label>새 컨테이너 id <input id="newId" value="extra-1" size="10"></label>
-    <label>컬럼 <input id="newCols" type="number" value="8" min="1" max="48" style="width: 60px"></label>
-    <button id="addContainer">컨테이너 추가</button>
-    <button id="removeAll">모든 컨테이너 제거</button>
-    <button id="reRegister">기본 3개 재등록</button>
-    <span style="width: 12px"></span>
-    <button id="activeUndo">활성 undo</button>
-    <button id="activeRedo">활성 redo</button>
-    <button id="activeAdd">활성에 항목 추가</button>
-    <span style="width: 12px"></span>
-    <label><input type="checkbox" id="crossDrag"> 컨테이너 간 이동 (마우스·터치)</label>
-    <b id="crossState">꺼짐</b>
-  </div>
-  <div class="palette" id="palette">
-    <span class="title">공통 팔레트 — 아래 아무 컨테이너로 끌어다 놓으세요</span>
-    <div class="pal" data-w="3" data-h="2" data-title="Chart" data-content="New chart">+ Chart (3x2)</div>
-    <div class="pal" data-w="4" data-h="2" data-title="Table" data-content="New table">+ Table (4x2)</div>
-    <div class="pal" data-w="2" data-h="1">+ Small (2x1)</div>
-    <div class="pal-ext" data-w="2" data-h="2" data-title="External" data-content="외부 모델">+ External (autoAdd:false)</div>
-  </div>
+    <div class="layout">
+      <div class="containers" id="containers"></div>
+      <aside>
+        <section>
+          <h4>등록된 컨테이너</h4>
+          <ol id="list"></ol>
+          <div>활성: <b id="activeId">-</b></div>
+        </section>
+        <section class="transfer">
+          <h4>컨테이너 간 이동 (API)</h4>
+          <label
+            >항목
+            <select id="trItem" aria-label="이동할 항목"></select
+          ></label>
+          <label
+            >대상 컨테이너
+            <select id="trTo" aria-label="대상 컨테이너"></select
+          ></label>
+          <div class="xy">
+            <label>x <input type="number" id="trX" placeholder="자동" /></label>
+            <label>y <input type="number" id="trY" placeholder="자동" /></label>
+          </div>
+          <label>새 id (선택) <input type="text" id="trNewId" placeholder="충돌 시 지정" /></label>
+          <button id="trRun">이동</button>
+          <div id="trResult"></div>
+          <p class="hint">
+            같은 id 가 이미 있으면 거절됩니다(예: header/body 의 <code>logo</code>). 이동은 두 컨테이너의 이력에 하나의
+            연결 기록으로 남아 어느 쪽 undo/redo 든 양쪽을 함께 되돌립니다. 다만 상대 컨테이너에 그 뒤의 편집이 있으면
+            이동 undo 가 막히고(<code>undo ✗</code>), 그 편집을 먼저 되돌리면 다시 가능합니다. undo 후 어느 쪽이든 새로
+            편집하면 이동 redo 는 양쪽에서 사라집니다. 한쪽이 <code>history:false</code> 면 두 이력이 비워집니다.
+          </p>
+        </section>
+        <section>
+          <h4>전체 JSON</h4>
+          <div class="toolbar">
+            <button id="save">저장</button>
+            <button id="restore">복원</button>
+            <label><input type="checkbox" id="ignoreUnknown" /> 미등록 무시</label>
+          </div>
+          <textarea id="json" aria-label="manager json"></textarea>
+          <div id="status"></div>
+        </section>
+        <section>
+          <h4>이벤트 <button id="clearEvents" style="float: right">지우기</button></h4>
+          <ul id="events"></ul>
+        </section>
+      </aside>
+    </div>
 
-  <div class="layout">
-    <div class="containers" id="containers"></div>
-    <aside>
-      <section>
-        <h4>등록된 컨테이너</h4>
-        <ol id="list"></ol>
-        <div>활성: <b id="activeId">-</b></div>
-      </section>
-      <section class="transfer">
-        <h4>컨테이너 간 이동 (API)</h4>
-        <label>항목 <select id="trItem" aria-label="이동할 항목"></select></label>
-        <label>대상 컨테이너 <select id="trTo" aria-label="대상 컨테이너"></select></label>
-        <div class="xy">
-          <label>x <input type="number" id="trX" placeholder="자동"></label>
-          <label>y <input type="number" id="trY" placeholder="자동"></label>
-        </div>
-        <label>새 id (선택) <input type="text" id="trNewId" placeholder="충돌 시 지정"></label>
-        <button id="trRun">이동</button>
-        <div id="trResult"></div>
-        <p class="hint">
-          같은 id 가 이미 있으면 거절됩니다(예: header/body 의 <code>logo</code>). 이동은 두 컨테이너의 이력에
-          하나의 연결 기록으로 남아 어느 쪽 undo/redo 든 양쪽을 함께 되돌립니다. 다만 상대 컨테이너에 그 뒤의 편집이 있으면
-          이동 undo 가 막히고(<code>undo ✗</code>), 그 편집을 먼저 되돌리면 다시 가능합니다. undo 후 어느 쪽이든 새로 편집하면
-          이동 redo 는 양쪽에서 사라집니다. 한쪽이 <code>history:false</code> 면 두 이력이 비워집니다.
-        </p>
-      </section>
-      <section>
-        <h4>전체 JSON</h4>
-        <div class="toolbar">
-          <button id="save">저장</button>
-          <button id="restore">복원</button>
-          <label><input type="checkbox" id="ignoreUnknown"> 미등록 무시</label>
-        </div>
-        <textarea id="json" aria-label="manager json"></textarea>
-        <div id="status"></div>
-      </section>
-      <section>
-        <h4>이벤트 <button id="clearEvents" style="float: right">지우기</button></h4>
-        <ul id="events"></ul>
-      </section>
-    </aside>
-  </div>
+    <script type="module">
+      import '/style/daracl.drift.scss';
+      import {
+        createDriftManager,
+        createDriftEditor,
+        parseContainerData,
+        DriftEditor,
+        DriftManager,
+      } from '/src/index.ts';
 
-  <script type="module">
-    import '/style/daracl.drift.scss';
-    import { createDriftManager, createDriftEditor, parseContainerData, DriftEditor, DriftManager } from '/src/index.ts';
+      const $ = (id) => document.getElementById(id);
+      // ?cross=1 이면 컨테이너 간 포인터 이동을 켠 상태로 시작한다
+      const manager = createDriftManager({
+        crossContainerDrag: new URLSearchParams(location.search).get('cross') === '1',
+      });
+      // e2e/성능 측정용
+      window.manager = manager;
+      window.Drift = { createDriftManager, createDriftEditor, parseContainerData, DriftEditor, DriftManager };
 
-    const $ = (id) => document.getElementById(id);
-    // ?cross=1 이면 컨테이너 간 포인터 이동을 켠 상태로 시작한다
-    const manager = createDriftManager({ crossContainerDrag: new URLSearchParams(location.search).get('cross') === '1' });
-    // e2e/성능 측정용
-    window.manager = manager;
-    window.Drift = { createDriftManager, createDriftEditor, parseContainerData, DriftEditor, DriftManager };
+      const PRESETS = {
+        header: {
+          columns: 12,
+          rowHeight: 30,
+          breakpoints: [],
+          items: [
+            { id: 'logo', x: 0, y: 0, w: 3, h: 2, content: 'Logo' },
+            { id: 'title', x: 3, y: 0, w: 9, h: 2, content: 'Title' },
+          ],
+        },
+        body: {
+          columns: 6,
+          rowHeight: 40,
+          items: [
+            { id: 'chart', x: 0, y: 0, w: 3, h: 3, content: 'Chart' },
+            { id: 'table', x: 3, y: 0, w: 3, h: 3, content: 'Table' },
+            { id: 'logo', x: 0, y: 3, w: 2, h: 2, content: 'Same id' },
+          ],
+        },
+        footer: {
+          columns: 24,
+          rowHeight: 24,
+          gap: 4,
+          float: true,
+          breakpoints: [],
+          items: [{ id: 'page', x: 20, y: 0, w: 4, h: 1, content: 'Page' }],
+        },
+      };
 
-    const PRESETS = {
-      header: { columns: 12, rowHeight: 30, breakpoints: [], items: [{ id: 'logo', x: 0, y: 0, w: 3, h: 2, content: 'Logo' }, { id: 'title', x: 3, y: 0, w: 9, h: 2, content: 'Title' }] },
-      body: { columns: 6, rowHeight: 40, items: [{ id: 'chart', x: 0, y: 0, w: 3, h: 3, content: 'Chart' }, { id: 'table', x: 3, y: 0, w: 3, h: 3, content: 'Table' }, { id: 'logo', x: 0, y: 3, w: 2, h: 2, content: 'Same id' }] },
-      footer: { columns: 24, rowHeight: 24, gap: 4, float: true, breakpoints: [], items: [{ id: 'page', x: 20, y: 0, w: 4, h: 1, content: 'Page' }] },
-    };
+      let seq = 0;
+      const status = (msg, error = false) => {
+        $('status').textContent = msg;
+        $('status').classList.toggle('error', error);
+      };
 
-    let seq = 0;
-    const status = (msg, error = false) => { $('status').textContent = msg; $('status').classList.toggle('error', error); };
-
-    /** 컨테이너 상자(머리글 + 에디터 영역)를 만들고 등록한다 */
-    function addContainer(id, layout, options = {}) {
-      const box = document.createElement('div');
-      box.className = 'box';
-      box.dataset.box = id;
-      box.innerHTML = `<div class="box-head">
+      /** 컨테이너 상자(머리글 + 에디터 영역)를 만들고 등록한다 */
+      function addContainer(id, layout, options = {}) {
+        const box = document.createElement('div');
+        box.className = 'box';
+        box.dataset.box = id;
+        box.innerHTML = `<div class="box-head">
           <span class="cid"></span>
           <button data-act="add">항목 추가</button>
           <button data-act="del">선택 삭제</button>
@@ -144,182 +332,228 @@
           <button data-act="redo">redo</button>
           <label><input type="checkbox" data-act="grid" checked> 격자</label>
           <select data-act="bp"><option value="">desktop</option></select>
+          <label title="Viewer fitHeight 에서 남은 높이를 행 수 비율로 채움"><input type="checkbox" data-act="autoH"> auto 높이</label>
           <button data-act="active">활성</button>
           <button data-act="remove">제거</button>
         </div><div class="box-body"></div>`;
-      $('containers').appendChild(box);
-      const body = box.querySelector('.box-body');
-      body.id = `c-${id}`;
-      let editor;
-      try {
-        editor = manager.register(id, body, { layout, removable: true, ...options });
-      } catch (err) {
-        box.remove();
-        status(err.message, true);
-        return undefined;
+        $('containers').appendChild(box);
+        const body = box.querySelector('.box-body');
+        body.id = `c-${id}`;
+        let editor;
+        try {
+          editor = manager.register(id, body, { layout, removable: true, ...options });
+        } catch (err) {
+          box.remove();
+          status(err.message, true);
+          return undefined;
+        }
+        box.querySelector('.cid').innerHTML = '';
+        box
+          .querySelector('.cid')
+          .append(id, Object.assign(document.createElement('small'), { textContent: ` · ${editor.getColumns()}열` }));
+        const bp = box.querySelector('[data-act="bp"]');
+        (editor.getLayout().breakpoints ?? [{ name: 'tablet' }, { name: 'mobile' }]).forEach((b) =>
+          bp.add(new Option(b.name, b.name)),
+        );
+        box.querySelector('.box-head').addEventListener('click', (e) => {
+          const act = e.target.dataset?.act;
+          if (act === 'add') editor.addItem({ id: `n${++seq}`, w: 2, h: 2, content: `New ${seq}` });
+          else if (act === 'del') {
+            const s = editor.getSelected();
+            if (s) editor.removeItem(s.id);
+          } else if (act === 'undo') editor.undo();
+          else if (act === 'redo') editor.redo();
+          else if (act === 'active') manager.setActive(id);
+          else if (act === 'remove') manager.unregister(id);
+        });
+        box.querySelector('[data-act="grid"]').onchange = (e) => editor.setGrid(e.target.checked);
+        bp.onchange = (e) => editor.setBreakpoint(e.target.value || null);
+        // Viewer fitHeight 높이 방식 (저장 데이터의 containers[].height)
+        const autoH = box.querySelector('[data-act="autoH"]');
+        autoH.checked = manager.getContainerHeight(id) === 'auto';
+        autoH.onchange = (e) => manager.setContainerHeight(id, e.target.checked ? 'auto' : undefined);
+        return editor;
       }
-      box.querySelector('.cid').innerHTML = '';
-      box.querySelector('.cid').append(id, Object.assign(document.createElement('small'), { textContent: ` · ${editor.getColumns()}열` }));
-      const bp = box.querySelector('[data-act="bp"]');
-      (editor.getLayout().breakpoints ?? [{ name: 'tablet' }, { name: 'mobile' }]).forEach((b) => bp.add(new Option(b.name, b.name)));
-      box.querySelector('.box-head').addEventListener('click', (e) => {
-        const act = e.target.dataset?.act;
-        if (act === 'add') editor.addItem({ id: `n${++seq}`, w: 2, h: 2, content: `New ${seq}` });
-        else if (act === 'del') { const s = editor.getSelected(); if (s) editor.removeItem(s.id); }
-        else if (act === 'undo') editor.undo();
-        else if (act === 'redo') editor.redo();
-        else if (act === 'active') manager.setActive(id);
-        else if (act === 'remove') manager.unregister(id);
-      });
-      box.querySelector('[data-act="grid"]').onchange = (e) => editor.setGrid(e.target.checked);
-      bp.onchange = (e) => editor.setBreakpoint(e.target.value || null);
-      return editor;
-    }
 
-    function registerDefaults() {
-      for (const [id, layout] of Object.entries(PRESETS)) if (!manager.has(id)) addContainer(id, layout);
-    }
+      function registerDefaults() {
+        // body 는 Viewer fitHeight 에서 남은 높이를 채운다(header/footer 는 고정 높이)
+        for (const [id, layout] of Object.entries(PRESETS)) {
+          if (!manager.has(id)) addContainer(id, layout, id === 'body' ? { height: 'auto' } : {});
+        }
+      }
 
-    function renderList() {
-      const active = manager.getActiveId();
-      $('list').innerHTML = '';
-      for (const id of manager.getIds()) {
+      function renderList() {
+        const active = manager.getActiveId();
+        $('list').innerHTML = '';
+        for (const id of manager.getIds()) {
+          const li = document.createElement('li');
+          const ed = manager.get(id);
+          li.textContent = `${id} (${ed.getItems().length}) `;
+          // undo/redo 가능 여부: 연결 기록이 상대 컨테이너의 후속 편집에 막히면 ✗
+          li.append(
+            Object.assign(document.createElement('small'), {
+              textContent: `undo ${ed.canUndo() ? '✓' : '✗'} · redo ${ed.canRedo() ? '✓' : '✗'}`,
+            }),
+          );
+          if (id === active) li.dataset.active = '';
+          $('list').appendChild(li);
+        }
+        $('activeId').textContent = active ?? '-';
+        renderTransferOptions();
+        document.querySelectorAll('.box').forEach((b) => b.toggleAttribute('data-active', b.dataset.box === active));
+      }
+
+      function log(name, detail) {
         const li = document.createElement('li');
-        const ed = manager.get(id);
-        li.textContent = `${id} (${ed.getItems().length}) `;
-        // undo/redo 가능 여부: 연결 기록이 상대 컨테이너의 후속 편집에 막히면 ✗
-        li.append(Object.assign(document.createElement('small'), {
-          textContent: `undo ${ed.canUndo() ? '✓' : '✗'} · redo ${ed.canRedo() ? '✓' : '✗'}`,
-        }));
-        if (id === active) li.dataset.active = '';
-        $('list').appendChild(li);
+        li.textContent = `${name} ${detail}`;
+        $('events').prepend(li);
+        while ($('events').children.length > 200) $('events').lastChild.remove();
       }
-      $('activeId').textContent = active ?? '-';
-      renderTransferOptions();
-      document.querySelectorAll('.box').forEach((b) => b.toggleAttribute('data-active', b.dataset.box === active));
-    }
 
-    function log(name, detail) {
-      const li = document.createElement('li');
-      li.textContent = `${name} ${detail}`;
-      $('events').prepend(li);
-      while ($('events').children.length > 200) $('events').lastChild.remove();
-    }
-
-    manager.on('containerRegistered', ({ containerId }) => { log('containerRegistered', containerId); renderList(); });
-    manager.on('containerUnregistered', ({ containerId }) => {
-      log('containerUnregistered', containerId);
-      document.querySelector(`.box[data-box="${CSS.escape(containerId)}"]`)?.remove();
-      renderList();
-    });
-    manager.on('activeChange', ({ containerId, previousId }) => { log('activeChange', `${previousId} → ${containerId}`); renderList(); });
-    manager.on('layoutChange', ({ containerId, info }) => {
-      log('layoutChange', `${containerId} ${info.reason}/${info.source} +${info.changes.added.length} -${info.changes.removed.length} ~${info.changes.changed.length}`);
-      renderList();
-    });
-    manager.on('itemTransfer', ({ transactionId, action, from, to, beforeItem, afterItem, source }) => {
-      log('itemTransfer', `${action} ${from}→${to} ${beforeItem.id}→${afterItem.id} ${source} ${transactionId}`);
-      renderList();
-    });
-    manager.on('transferReject', ({ reason, from, to, itemId }) => {
-      log('transferReject', `${reason} ${from}→${to} ${itemId}`);
-      showResult(`거절: ${reason} (${from} → ${to ?? '-'}, ${itemId})`, true);
-    });
-    manager.on('dragInStart', () => log('dragInStart', ''));
-    manager.on('dragInEnd', ({ containerId, item }) => log('dragInEnd', `${containerId} ${item ? item.id : null}`));
-
-    manager.setupDragIn('.pal');
-    // 외부 모델 시뮬레이션: Drift 는 드롭 정보만 주고 호출자가 id 를 정해 추가한다
-    manager.setupDragIn('.pal-ext', {
-      autoAdd: false,
-      onDrop: ({ containerId, editor, item, breakpoint }) => {
-        log('onDrop', `${containerId} ${JSON.stringify({ x: item.x, y: item.y, w: item.w, h: item.h })} bp=${breakpoint}`);
-        editor.addItem({ ...item, id: `ext-${++seq}` }, { source: 'user' });
-      },
-    });
-
-    registerDefaults();
-
-    $('addContainer').onclick = () => {
-      const id = $('newId').value.trim();
-      if (addContainer(id, { columns: Number($('newCols').value) || 8, breakpoints: [], items: [] })) {
-        status(`${id} 등록`);
-        $('newId').value = `extra-${manager.getIds().length}`;
-      }
-    };
-    $('removeAll').onclick = () => manager.getIds().forEach((id) => manager.unregister(id));
-    $('reRegister').onclick = registerDefaults;
-    $('activeUndo').onclick = () => manager.getActiveEditor()?.undo();
-    $('activeRedo').onclick = () => manager.getActiveEditor()?.redo();
-    $('activeAdd').onclick = () => manager.getActiveEditor()?.addItem({ id: `n${++seq}`, w: 2, h: 1, content: `New ${seq}` });
-    $('save').onclick = () => { $('json').value = manager.toJSON(2); status(`저장: ${manager.getIds().length}개 컨테이너`); };
-    $('restore').onclick = () => {
-      try {
-        const ids = manager.fromJSON($('json').value, { unknown: $('ignoreUnknown').checked ? 'ignore' : 'error' });
-        status(`복원: ${ids.join(', ')}`);
+      manager.on('containerRegistered', ({ containerId }) => {
+        log('containerRegistered', containerId);
         renderList();
-      } catch (err) {
-        status(err.message, true);
-      }
-    };
-    $('clearEvents').onclick = () => { $('events').innerHTML = ''; };
+      });
+      manager.on('containerUnregistered', ({ containerId }) => {
+        log('containerUnregistered', containerId);
+        document.querySelector(`.box[data-box="${CSS.escape(containerId)}"]`)?.remove();
+        renderList();
+      });
+      manager.on('activeChange', ({ containerId, previousId }) => {
+        log('activeChange', `${previousId} → ${containerId}`);
+        renderList();
+      });
+      manager.on('layoutChange', ({ containerId, info }) => {
+        log(
+          'layoutChange',
+          `${containerId} ${info.reason}/${info.source} +${info.changes.added.length} -${info.changes.removed.length} ~${info.changes.changed.length}`,
+        );
+        renderList();
+      });
+      manager.on('itemTransfer', ({ transactionId, action, from, to, beforeItem, afterItem, source }) => {
+        log('itemTransfer', `${action} ${from}→${to} ${beforeItem.id}→${afterItem.id} ${source} ${transactionId}`);
+        renderList();
+      });
+      manager.on('transferReject', ({ reason, from, to, itemId }) => {
+        log('transferReject', `${reason} ${from}→${to} ${itemId}`);
+        showResult(`거절: ${reason} (${from} → ${to ?? '-'}, ${itemId})`, true);
+      });
+      manager.on('dragInStart', () => log('dragInStart', ''));
+      manager.on('dragInEnd', ({ containerId, item }) => log('dragInEnd', `${containerId} ${item ? item.id : null}`));
 
-    // ── 컨테이너 간 이동 ──
-    const showResult = (text, error = false) => {
-      $('trResult').textContent = text;
-      $('trResult').classList.toggle('error', error);
-    };
-    function syncCross() {
-      $('crossDrag').checked = manager.isCrossContainerDrag();
-      $('crossState').textContent = manager.isCrossContainerDrag() ? '켜짐' : '꺼짐';
-    }
-    $('crossDrag').onchange = (e) => { manager.setCrossContainerDrag(e.target.checked); syncCross(); };
-    syncCross();
+      manager.setupDragIn('.pal');
+      // 외부 모델 시뮬레이션: Drift 는 드롭 정보만 주고 호출자가 id 를 정해 추가한다
+      manager.setupDragIn('.pal-ext', {
+        autoAdd: false,
+        onDrop: ({ containerId, editor, item, breakpoint }) => {
+          log(
+            'onDrop',
+            `${containerId} ${JSON.stringify({ x: item.x, y: item.y, w: item.w, h: item.h })} bp=${breakpoint}`,
+          );
+          editor.addItem({ ...item, id: `ext-${++seq}` }, { source: 'user' });
+        },
+      });
 
-    function renderTransferOptions() {
-      const item = $('trItem');
-      const to = $('trTo');
-      const keepItem = item.value;
-      const keepTo = to.value;
-      item.textContent = '';
-      to.textContent = '';
-      for (const id of manager.getIds()) {
-        for (const it of manager.get(id).getItems()) item.add(new Option(`${id} / ${it.id}`, JSON.stringify([id, it.id])));
-        to.add(new Option(id, id));
-      }
-      if ([...item.options].some((o) => o.value === keepItem)) item.value = keepItem;
-      // 선택한 항목이 있으면 그 항목을 기본으로
-      const active = manager.getActiveEditor();
-      const sel = active?.getSelected();
-      if (sel) {
-        const v = JSON.stringify([manager.getActiveId(), sel.id]);
-        if ([...item.options].some((o) => o.value === v)) item.value = v;
-      }
-      if ([...to.options].some((o) => o.value === keepTo)) to.value = keepTo;
-    }
-    $('trRun').onclick = () => {
-      if (!$('trItem').value) return;
-      const [from, itemId] = JSON.parse($('trItem').value);
-      const req = { from, to: $('trTo').value, itemId };
-      const x = $('trX').value;
-      const y = $('trY').value;
-      if (x !== '' || y !== '') {
-        req.x = x === '' ? undefined : Number(x);
-        req.y = y === '' ? undefined : Number(y);
-      }
-      if ($('trNewId').value.trim()) req.newId = $('trNewId').value.trim();
-      try {
-        const r = manager.transferItem(req);
-        if (r.moved) showResult(`이동: ${r.from} → ${r.to} ${r.item.id} (${r.transactionId})`);
-        else showResult(`거절: ${r.reason}`, true);
-      } catch (err) {
-        showResult(err.message, true);
-      }
-      renderList();
-    };
-    renderTransferOptions();
-    window.ready = true;
-  </script>
-</body>
+      registerDefaults();
 
+      $('addContainer').onclick = () => {
+        const id = $('newId').value.trim();
+        if (addContainer(id, { columns: Number($('newCols').value) || 8, breakpoints: [], items: [] })) {
+          status(`${id} 등록`);
+          $('newId').value = `extra-${manager.getIds().length}`;
+        }
+      };
+      $('removeAll').onclick = () => manager.getIds().forEach((id) => manager.unregister(id));
+      $('reRegister').onclick = registerDefaults;
+      $('activeUndo').onclick = () => manager.getActiveEditor()?.undo();
+      $('activeRedo').onclick = () => manager.getActiveEditor()?.redo();
+      $('activeAdd').onclick = () =>
+        manager.getActiveEditor()?.addItem({ id: `n${++seq}`, w: 2, h: 1, content: `New ${seq}` });
+      // 저장: 전체 레이아웃을 localStorage 에도 기록한다. multi-container-viewer.html 이 같은 키로 읽어 보여준다
+      $('save').onclick = () => {
+        $('json').value = manager.toJSON(2);
+        try {
+          localStorage.setItem('drift:containers', manager.toJSON());
+          $('status').classList.remove('error');
+          $('status').innerHTML = `저장: ${
+            manager.getIds().length
+          }개 컨테이너 → <a href="/uitest/multi-container-viewer.html" target="_blank">viewer</a> 에서 확인`;
+        } catch (err) {
+          status(`저장 실패: ${err.message}`, true);
+        }
+      };
+      $('restore').onclick = () => {
+        try {
+          const ids = manager.fromJSON($('json').value, { unknown: $('ignoreUnknown').checked ? 'ignore' : 'error' });
+          status(`복원: ${ids.join(', ')}`);
+          renderList();
+        } catch (err) {
+          status(err.message, true);
+        }
+      };
+      $('clearEvents').onclick = () => {
+        $('events').innerHTML = '';
+      };
+
+      // ── 컨테이너 간 이동 ──
+      const showResult = (text, error = false) => {
+        $('trResult').textContent = text;
+        $('trResult').classList.toggle('error', error);
+      };
+      function syncCross() {
+        $('crossDrag').checked = manager.isCrossContainerDrag();
+        $('crossState').textContent = manager.isCrossContainerDrag() ? '켜짐' : '꺼짐';
+      }
+      $('crossDrag').onchange = (e) => {
+        manager.setCrossContainerDrag(e.target.checked);
+        syncCross();
+      };
+      syncCross();
+
+      function renderTransferOptions() {
+        const item = $('trItem');
+        const to = $('trTo');
+        const keepItem = item.value;
+        const keepTo = to.value;
+        item.textContent = '';
+        to.textContent = '';
+        for (const id of manager.getIds()) {
+          for (const it of manager.get(id).getItems())
+            item.add(new Option(`${id} / ${it.id}`, JSON.stringify([id, it.id])));
+          to.add(new Option(id, id));
+        }
+        if ([...item.options].some((o) => o.value === keepItem)) item.value = keepItem;
+        // 선택한 항목이 있으면 그 항목을 기본으로
+        const active = manager.getActiveEditor();
+        const sel = active?.getSelected();
+        if (sel) {
+          const v = JSON.stringify([manager.getActiveId(), sel.id]);
+          if ([...item.options].some((o) => o.value === v)) item.value = v;
+        }
+        if ([...to.options].some((o) => o.value === keepTo)) to.value = keepTo;
+      }
+      $('trRun').onclick = () => {
+        if (!$('trItem').value) return;
+        const [from, itemId] = JSON.parse($('trItem').value);
+        const req = { from, to: $('trTo').value, itemId };
+        const x = $('trX').value;
+        const y = $('trY').value;
+        if (x !== '' || y !== '') {
+          req.x = x === '' ? undefined : Number(x);
+          req.y = y === '' ? undefined : Number(y);
+        }
+        if ($('trNewId').value.trim()) req.newId = $('trNewId').value.trim();
+        try {
+          const r = manager.transferItem(req);
+          if (r.moved) showResult(`이동: ${r.from} → ${r.to} ${r.item.id} (${r.transactionId})`);
+          else showResult(`거절: ${r.reason}`, true);
+        } catch (err) {
+          showResult(err.message, true);
+        }
+        renderList();
+      };
+      renderTransferOptions();
+      window.ready = true;
+    </script>
+  </body>
 </html>

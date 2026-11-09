@@ -1,6 +1,6 @@
 {
   "name": "@daracl/drift",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "Daracl Drift - drag & drop layout editor with a CSS-only viewer",
   "author": {
     "name": "daracl",

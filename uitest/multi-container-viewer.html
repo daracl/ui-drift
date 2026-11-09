@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ui-drift multi container viewer</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 12px;
+        font-family: system-ui, sans-serif;
+        background: #f3f4f6;
+        font-size: 13px;
+      }
+      h3 {
+        margin: 0 0 8px;
+      }
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      #status {
+        color: #475569;
+        min-height: 1.4em;
+        margin-bottom: 8px;
+      }
+      #status.error {
+        color: #dc2626;
+      }
+      #viewer {
+        background: #fff;
+        border: 1px dashed #cbd5e1;
+      }
+      /* fitHeight: 바깥 묶음이 이 높이를 채운다. 고정 컨테이너를 뺀 나머지를 auto 컨테이너가 행 수 비율로 나눈다 */
+      body.fit #viewer {
+        height: calc(100vh - 150px);
+      }
+      /* 컨테이너 경계를 보이게 한다 (Viewer 출력에는 테두리가 없다) */
+      #viewer [data-container-id] {
+        outline: 1px solid #94a3b8;
+        outline-offset: -1px;
+      }
+      #viewer [data-height='auto'] {
+        background: #eff6ff;
+      }
+      details {
+        margin-top: 12px;
+      }
+      textarea {
+        width: 100%;
+        box-sizing: border-box;
+        height: 160px;
+        font-family: monospace;
+        font-size: 11px;
+      }
+    </style>
+  </head>
+  <body>
+    <h3>ui-drift Viewer (여러 컨테이너)</h3>
+    <div class="toolbar">
+      <a href="/uitest/multi-container.html" target="_blank">multi-container.html</a>
+      <span>에서 '저장'하면 이 페이지가 갱신됩니다.</span>
+      <label><input type="checkbox" id="fit" /> fitHeight</label>
+      <label>높이 <input type="number" id="height" placeholder="자동(100vh)" style="width: 90px" /> px</label>
+      <span>auto 컨테이너는 파란 배경</span>
+    </div>
+    <div id="status"></div>
+    <div id="viewer"></div>
+    <style id="viewerCss"></style>
+
+    <details>
+      <summary>JSON 직접 입력</summary>
+      <textarea id="json" aria-label="container json"></textarea>
+      <button id="apply">표시</button>
+    </details>
+
+    <script type="module">
+      import { renderContainersViewer } from '/src/viewer.ts';
+
+      // multi-container.html 의 '저장'이 기록하는 키와 같아야 한다
+      const STORAGE_KEY = 'drift:containers';
+      const $ = (id) => document.getElementById(id);
+      const params = new URLSearchParams(location.search);
+      // ?fit=1 → fitHeight, ?mobile=600 → 한 줄로 쌓는 폭(기본 767), ?h=500 → 뷰어 높이
+      $('fit').checked = params.has('fit');
+      $('height').value = params.get('h') || '';
+      const mobileMaxWidth = Number(params.get('mobile')) || 767;
+      let raw = null;
+      let source = '';
+
+      const status = (msg, error = false) => {
+        $('status').textContent = msg;
+        $('status').classList.toggle('error', error);
+      };
+
+      /** 실패하면 이전 화면을 그대로 둔다 */
+      function render() {
+        if (!raw) return;
+        const fit = $('fit').checked;
+        document.body.classList.toggle('fit', fit);
+        $('viewer').style.height = Number($('height').value) > 0 ? `${$('height').value}px` : '';
+        let result;
+        try {
+          result = renderContainersViewer(raw, { fitHeight: fit, mobileMaxWidth, containerGap: 12 });
+        } catch (err) {
+          status(`레이아웃을 해석할 수 없습니다: ${err.message}`, true);
+          return;
+        }
+        $('viewerCss').textContent = result.css;
+        // Viewer 의 html 은 escapeHtml 처리된 정적 문자열이다
+        $('viewer').innerHTML = result.html;
+        const summary = result.containers.map((c) => `${c.id}(${c.height}, ${c.rows}행)`).join(' · ');
+        status(`${source}: ${summary}`);
+      }
+
+      function load() {
+        try {
+          raw = localStorage.getItem(STORAGE_KEY);
+        } catch (err) {
+          raw = null;
+        }
+        if (!raw) {
+          $('viewer').textContent = '';
+          $('viewerCss').textContent = '';
+          status('저장된 레이아웃이 없습니다. multi-container.html 에서 저장하거나 아래에 JSON 을 붙여 넣으세요.');
+          return;
+        }
+        $('json').value = raw;
+        source = `localStorage('${STORAGE_KEY}')`;
+        render();
+      }
+
+      $('apply').onclick = () => {
+        raw = $('json').value;
+        source = '입력한 JSON';
+        render();
+      };
+      $('fit').onchange = render;
+      $('height').oninput = render;
+      load();
+      // 다른 탭에서 다시 저장하면 바로 갱신한다
+      window.addEventListener('storage', (e) => e.key === STORAGE_KEY && load());
+      window.ready = true;
+    </script>
+  </body>
+</html>

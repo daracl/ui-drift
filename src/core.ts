@@ -53,6 +53,7 @@ export type {
   DriftBreakpoint,
   DriftChanges,
   DriftContainerData,
+  DriftContainerHeight,
   DriftContainerLayout,
   DriftGeometry,
   DriftItem,
