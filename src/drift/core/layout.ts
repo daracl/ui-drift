@@ -2,6 +2,7 @@ import { DEFAULT_COLUMNS, DEFAULT_GAP, DEFAULT_ROW_HEIGHT, LAYOUT_VERSION } from
 import { cloneJson, isArray, isPlainObject, isString } from '@daracl/core/utils';
 import {
   DriftBreakpoint,
+  DriftContainerMargin,
   DriftGeometry,
   DriftItem,
   DriftLayout,
@@ -25,7 +26,25 @@ export function createLayout(input: Partial<DriftLayout> = {}): DriftLayout {
   };
   if (input.float === true) layout.float = true;
   if (input.breakpoints) layout.breakpoints = input.breakpoints.map((bp) => ({ ...bp }));
+  const containerMargin = sanitizeContainerMargin(input.containerMargin);
+  if (containerMargin !== undefined) layout.containerMargin = containerMargin;
   return layout;
+}
+
+const MARGIN_SIDES = ['top', 'right', 'bottom', 'left'] as const;
+// margin 은 음수도 허용한다 (CSS margin 과 같다). NaN/Infinity/숫자가 아닌 값만 버린다
+const isMargin = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+
+/**
+ * 컨테이너 margin(`layout.containerMargin`)을 검증한다. 유한한 숫자(음수 포함)는 그대로,
+ * 객체는 올바른 방향 값만 남긴 새 객체를 돌려준다. 그 밖의 값이나 남는 방향이 없는 객체는 undefined (지정하지 않음).
+ */
+export function sanitizeContainerMargin(value: unknown): number | DriftContainerMargin | undefined {
+  if (isMargin(value)) return value;
+  if (!isPlainObject(value)) return undefined;
+  const margin: DriftContainerMargin = {};
+  for (const side of MARGIN_SIDES) if (isMargin(value[side])) margin[side] = value[side] as number;
+  return Object.keys(margin).length ? margin : undefined;
 }
 
 function positive(v: unknown, fallback: number): number {

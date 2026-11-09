@@ -6,17 +6,31 @@ test.use({ viewport: { width: 1280, height: 1000 } });
 
 const C = (id: string) => `#viewer [data-container-id="${id}"]`;
 const GAP = 12;
+/** 데모 header 프리셋의 containerMargin: { bottom: 10 } */
+const HEADER_BOTTOM = 10;
 
 async function openViewer(page: Page, query = '') {
   await page.goto(`/uitest/multi-container-viewer.html${query}`);
   await page.waitForFunction(() => (window as any).ready === true);
 }
 
-/** multi-container 화면에서 저장한다. body 는 기본으로 height:'auto' 다 */
+/** multi-container 화면에서 저장한다. body 는 기본으로 height:'auto', header 는 containerMargin { bottom: 10 } 이다 */
 async function saveFromEditor(page: Page, setup?: () => void) {
   await page.goto('/uitest/multi-container.html');
   await page.waitForFunction(() => (window as any).ready === true);
   if (setup) await page.evaluate(setup);
+  await page.click('#save');
+}
+
+/** 컨테이너들의 layout.containerMargin 을 바꿔 저장한다 (undefined 면 제거). 레이아웃 속성이므로 fromJSON 으로 바꾼다 */
+async function saveWithMargins(page: Page, margins: Record<string, unknown>) {
+  await saveFromEditor(page, () => undefined);
+  await page.evaluate((m) => {
+    const manager = (window as any).manager;
+    const data = JSON.parse(manager.toJSON());
+    for (const c of data.containers) if (c.id in m) c.layout.containerMargin = m[c.id] ?? undefined;
+    manager.fromJSON(data);
+  }, margins);
   await page.click('#save');
 }
 
@@ -46,8 +60,9 @@ test.describe('multi-container-viewer', () => {
     // header: 2행 × 30 + gap 8(기본), footer: 1행 × 24
     expect(header.height).toBeCloseTo(2 * 30 + 8, 0);
     expect(footer.height).toBeCloseTo(24, 0);
-    // auto(body) 는 나머지를 모두 받는다 (테두리 2px 포함)
-    expect(body.height).toBeCloseTo(viewer.height - 2 - header.height - footer.height - 2 * GAP, 0);
+    // auto(body) 는 나머지를 모두 받는다 (테두리 2px, header 아래 margin 포함)
+    expect(body.height).toBeCloseTo(viewer.height - 2 - header.height - footer.height - 2 * GAP - HEADER_BOTTOM, 0);
+    expect(body.y - (header.y + header.height)).toBeCloseTo(HEADER_BOTTOM + GAP, 0);
     // body 안 항목은 행 수(5행)로 나눈 높이를 채운다: chart(3행) + logo(2행) 가 body 높이를 꽉 채운다
     const chart = await box(page, `${C('body')} [data-drift-id="chart"]`);
     const logo = await box(page, `${C('body')} [data-drift-id="logo"]`);
@@ -67,8 +82,56 @@ test.describe('multi-container-viewer', () => {
     const footer = await box(page, C('footer'));
     expect(footer.height).toBeCloseTo(24, 0);
     // header 2행 : body 5행
-    expect(header.height + body.height).toBeCloseTo(viewer.height - 2 - footer.height - 2 * GAP, 0);
+    expect(header.height + body.height).toBeCloseTo(viewer.height - 2 - footer.height - 2 * GAP - HEADER_BOTTOM, 0);
     expect(body.height / header.height).toBeCloseTo(5 / 2, 1);
+  });
+
+  test('layout.containerMargin: 컨테이너마다 다른 margin 과 전체 gap 을 빼고 남은 높이를 auto 컨테이너가 채운다', async ({
+    page,
+  }) => {
+    await saveWithMargins(page, {
+      header: { top: 0, right: 40, bottom: 0, left: 40 },
+      body: 10,
+      footer: { top: 30, left: 50 },
+    });
+    await openViewer(page, '?fit=1&h=700&gap=20');
+    const viewer = await box(page, '#viewer');
+    const header = await box(page, C('header'));
+    const body = await box(page, C('body'));
+    const footer = await box(page, C('footer'));
+    const left = viewer.x + 1;
+    // header: 위/아래 0, 좌우 40
+    expect(header.y).toBeCloseTo(viewer.y + 1, 0);
+    expect(header.x - left).toBeCloseTo(40, 0);
+    expect(header.width).toBeCloseTo(viewer.width - 2 - 80, 0);
+    expect(header.height).toBeCloseTo(68, 0);
+    // body: 네 방향 10, 컨테이너 사이는 margin + gap(20)
+    expect(body.x - left).toBeCloseTo(10, 0);
+    expect(body.y - (header.y + header.height)).toBeCloseTo(0 + 20 + 10, 0);
+    // footer: top 30, left 50, 나머지 0
+    expect(footer.y - (body.y + body.height)).toBeCloseTo(10 + 20 + 30, 0);
+    expect(footer.x - left).toBeCloseTo(50, 0);
+    expect(viewer.y + viewer.height - 1 - (footer.y + footer.height)).toBeCloseTo(0, 0);
+  });
+
+  test('음수 containerMargin: 앞 컨테이너와 겹치고, 그만큼 auto 컨테이너 높이가 늘어난다', async ({ page }) => {
+    await saveWithMargins(page, { header: undefined, footer: { top: -10 } });
+    await openViewer(page, '?fit=1&h=700&gap=0');
+    const viewer = await box(page, '#viewer');
+    const header = await box(page, C('header'));
+    const body = await box(page, C('body'));
+    const footer = await box(page, C('footer'));
+    // footer 가 body 아래쪽 10px 와 겹친다
+    expect(footer.y - (body.y + body.height)).toBeCloseTo(-10, 0);
+    // 겹친 부분은 위쪽(앞 순서) 컨테이너인 body 가 위에 그려진다
+    const top = await page.evaluate(
+      ([x, y]) =>
+        (document.elementFromPoint(x, y) as Element).closest('[data-container-id]')?.getAttribute('data-container-id'),
+      [footer.x + 5, footer.y + 5],
+    );
+    expect(top).toBe('body');
+    // 음수 margin 만큼 남은 높이가 늘어난다
+    expect(body.height).toBeCloseTo(viewer.height - 2 - header.height - footer.height + 10, 0);
   });
 
   test('fitHeight: 모바일 폭에서는 맞춤을 끄고 rowHeight 로 쌓는다', async ({ page }) => {

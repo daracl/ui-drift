@@ -5,8 +5,10 @@ import {
   createDriftManager,
   createLayout,
   parseContainerData,
+  parseLayout,
   renderContainersViewer,
   serializeContainerData,
+  serializeLayout,
 } from '@/index';
 import type { DriftContainerData } from '@/index';
 
@@ -91,6 +93,95 @@ describe('renderContainersViewer', () => {
     expect(r.containers.every((c) => c.height === 'auto')).toBe(true);
     expect(r.css).toContain('.ddr-containers{height:100%;min-height:0px}');
     expect(r.css).toContain('repeat(2,minmax(10px,1fr))');
+  });
+
+  it('containerGap 은 전체에 한 번 적용되고 잘못된 값이면 기본값(12)이다', () => {
+    const base = renderContainersViewer(data);
+    expect(base.css).toContain(
+      '.ddr-containers{display:flex;flex-direction:column;box-sizing:border-box;width:100%;gap:12px}',
+    );
+    // containerMargin 이 없으면 margin 규칙/속성이 없다
+    expect(base.css).not.toContain('data-margin');
+    expect(base.html).not.toContain('data-margin');
+    expect(renderContainersViewer(data, { containerGap: 16 }).css).toContain('gap:16px}');
+    expect(renderContainersViewer(data, { containerGap: -3 }).css).toContain('gap:12px}');
+  });
+
+  it('layout.containerMargin 은 그 컨테이너에만 적용되고 같은 값은 한 규칙으로 묶인다', () => {
+    const margins = [10, { bottom: 10 }, 10, { top: -8, left: -4 }];
+    const withMargin: DriftContainerData = {
+      ...data,
+      containers: data.containers.map((c, i) => ({ ...c, layout: { ...c.layout, containerMargin: margins[i] } })),
+    };
+    const r = renderContainersViewer(withMargin);
+    expect(r.containers.map((c) => c.margin)).toEqual([
+      '10px 10px 10px 10px',
+      '0px 0px 10px 0px',
+      '10px 10px 10px 10px',
+      '-8px 0px 0px -4px',
+    ]);
+    expect(r.css.match(/\[data-margin=/g)).toHaveLength(3);
+    expect(r.css).toContain('.ddr-containers>[data-margin="0"]{margin:10px 10px 10px 10px}');
+    expect(r.css).toContain('.ddr-containers>[data-margin="1"]{margin:0px 0px 10px 0px}');
+    expect(r.css).toContain('.ddr-containers>[data-margin="2"]{margin:-8px 0px 0px -4px}');
+    expect(r.html).toContain('data-container-id="header" data-margin="0"');
+    expect(r.html).toContain('data-container-id="body" data-margin="1"');
+    expect(r.html).toContain('data-container-id="side" data-margin="0"');
+    expect(r.html).not.toContain('style=');
+  });
+
+  it('겹치면 위에 있는(앞 순서) 컨테이너가 위로 온다: z-index = 개수 - 순번', () => {
+    const r = renderContainersViewer(data);
+    expect(r.containers.map((c) => c.zIndex)).toEqual([4, 3, 2, 1]);
+    expect(r.css).toContain('.ddr-containers>.ddr-container{flex:none;min-width:0;position:relative}');
+    expect(r.css).toContain('.ddr-containers>:nth-child(1){z-index:4}');
+    expect(r.css).toContain('.ddr-containers>:nth-child(4){z-index:1}');
+  });
+
+  it('layout.containerMargin 은 레이아웃 검증/복원에서 유지된다 (음수 허용, 잘못된 값은 버림)', () => {
+    const parse = (containerMargin: unknown) =>
+      parseLayout(serializeLayout(parseLayout({ items: [], containerMargin }))).containerMargin;
+    expect(parse(6)).toBe(6);
+    expect(parse(-1)).toBe(-1);
+    expect(parse({ top: 4, left: -2, right: 'x', bottom: 0 })).toEqual({ top: 4, left: -2, bottom: 0 });
+    expect(parse({ left: null, top: NaN })).toBeUndefined();
+    expect(parse('8px')).toBeUndefined();
+    expect(parseLayout({ items: [], containerMargin: 'x' })).not.toHaveProperty('containerMargin');
+    // 컨테이너 묶음 저장 포맷에서도 유지된다
+    const parsed = parseContainerData(
+      serializeContainerData({
+        version: 1,
+        containers: [{ id: 'a', layout: { ...layout(1), containerMargin: { bottom: 10 } } }],
+      }),
+    );
+    expect(parsed.containers[0].layout.containerMargin).toEqual({ bottom: 10 });
+  });
+
+  it('Manager: register 의 layout.containerMargin 이 에디터 레이아웃에 남고 저장/복원/undo 와 함께 움직인다', () => {
+    document.body.innerHTML = '<div id="a"></div><div id="b"></div>';
+    const manager = createDriftManager();
+    const a = manager.register('a', '#a', { layout: { ...layout(1), containerMargin: { bottom: 10 } } });
+    manager.register('b', '#b', { layout: { columns: 12, containerMargin: 10, items: [] } });
+    expect(a.getLayout().containerMargin).toEqual({ bottom: 10 });
+    expect(manager.getLayouts().containers.map((c) => c.layout.containerMargin)).toEqual([{ bottom: 10 }, 10]);
+    // 편집해도 유지된다
+    a.addItem({ id: 'n', w: 2, h: 1 });
+    a.undo();
+    expect(a.getLayout().containerMargin).toEqual({ bottom: 10 });
+    // 반환값을 바꿔도 내부 상태는 그대로다
+    (a.getLayout().containerMargin as { bottom: number }).bottom = 99;
+    expect(a.getLayout().containerMargin).toEqual({ bottom: 10 });
+    // fromJSON 은 레이아웃 전체를 교체하므로 containerMargin 도 바뀐다
+    const saved = JSON.parse(manager.toJSON());
+    saved.containers[0].layout.containerMargin = -5;
+    manager.fromJSON(saved);
+    expect(a.getLayout().containerMargin).toBe(-5);
+    // Viewer 에 그대로 반영된다
+    expect(renderContainersViewer(manager.toJSON()).containers.map((c) => c.margin)).toEqual([
+      '-5px -5px -5px -5px',
+      '10px 10px 10px 10px',
+    ]);
+    manager.destroy();
   });
 
   it('renderContent 는 컨테이너 id 를 함께 받고 잘못된 scope/데이터는 예외', () => {

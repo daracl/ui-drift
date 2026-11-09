@@ -79,6 +79,12 @@ export interface DriftLayout {
   float?: boolean;
   /** 미지정이면 기본 breakpoint(tablet 8열, mobile 4열), 빈 배열이면 반응형 비활성 */
   breakpoints?: DriftBreakpoint[];
+  /**
+   * 여러 컨테이너 Viewer(`renderContainersViewer`)에서 이 컨테이너의 바깥 여백(px).
+   * 숫자 하나면 네 방향 모두, 객체면 방향별(생략한 방향은 0). 생략하면 0.
+   * 음수도 쓸 수 있고(CSS margin 과 같다) 숫자가 아니거나 NaN/Infinity 인 값은 버려진다. 에디터 화면에는 영향이 없다.
+   */
+  containerMargin?: number | DriftContainerMargin;
   items: DriftItem[];
 }
 
@@ -118,6 +124,14 @@ export interface DriftContainerLayout {
 
 /** 컨테이너 높이 방식. 현재는 'auto' 만 있고 생략하면 고정(행 수 × rowHeight) 높이다 */
 export type DriftContainerHeight = 'auto';
+
+/** 방향별 컨테이너 margin(px) */
+export interface DriftContainerMargin {
+  top?: number;
+  right?: number;
+  bottom?: number;
+  left?: number;
+}
 
 /** 여러 컨테이너의 레이아웃 저장 포맷. 각 layout 은 단일 에디터의 DriftLayout 과 같다 */
 export interface DriftContainerData {

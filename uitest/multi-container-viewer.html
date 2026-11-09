@@ -65,7 +65,10 @@
       <span>에서 '저장'하면 이 페이지가 갱신됩니다.</span>
       <label><input type="checkbox" id="fit" /> fitHeight</label>
       <label>높이 <input type="number" id="height" placeholder="자동(100vh)" style="width: 90px" /> px</label>
-      <span>auto 컨테이너는 파란 배경</span>
+      <label title="모든 컨테이너 사이에 한 번 적용"
+        >컨테이너 gap <input type="number" id="gap" value="12" min="0" style="width: 60px" /> px</label
+      >
+      <span>auto 컨테이너는 파란 배경. 컨테이너별 margin 은 각 레이아웃의 <code>containerMargin</code></span>
     </div>
     <div id="status"></div>
     <div id="viewer"></div>
@@ -87,6 +90,7 @@
       // ?fit=1 → fitHeight, ?mobile=600 → 한 줄로 쌓는 폭(기본 767), ?h=500 → 뷰어 높이
       $('fit').checked = params.has('fit');
       $('height').value = params.get('h') || '';
+      if (params.has('gap')) $('gap').value = params.get('gap');
       const mobileMaxWidth = Number(params.get('mobile')) || 767;
       let raw = null;
       let source = '';
@@ -104,7 +108,11 @@
         $('viewer').style.height = Number($('height').value) > 0 ? `${$('height').value}px` : '';
         let result;
         try {
-          result = renderContainersViewer(raw, { fitHeight: fit, mobileMaxWidth, containerGap: 12 });
+          result = renderContainersViewer(raw, {
+            fitHeight: fit,
+            mobileMaxWidth,
+            containerGap: Number($('gap').value) || 0,
+          });
         } catch (err) {
           status(`레이아웃을 해석할 수 없습니다: ${err.message}`, true);
           return;
@@ -140,6 +148,7 @@
       };
       $('fit').onchange = render;
       $('height').oninput = render;
+      $('gap').oninput = render;
       load();
       // 다른 탭에서 다시 저장하면 바로 갱신한다
       window.addEventListener('storage', (e) => e.key === STORAGE_KEY && load());

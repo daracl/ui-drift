@@ -1,6 +1,11 @@
 import { cloneJson, isString } from '@daracl/core/utils';
 import { planTransfer } from '@/drift/core/transfer';
-import { assertContainerId, parseContainerData, serializeContainerData } from '@/drift/core/containers';
+import {
+  assertContainerId,
+  parseContainerData,
+  sanitizeContainerProps,
+  serializeContainerData,
+} from '@/drift/core/containers';
 import { cloneLayout } from '@/drift/core/layout';
 import { CONTAINER_DATA_VERSION } from '@/drift/constants';
 import { Emitter } from '@/event/Emitter';
@@ -200,7 +205,7 @@ export class DriftManager {
       id,
       editor,
       container: el,
-      height: height === 'auto' ? 'auto' : undefined,
+      ...sanitizeContainerProps({ height }),
       abort,
       // 에디터가 직접 destroy 되면 등록만 정리한다 (에디터는 이미 해제 중)
       offDestroy: editor.on('destroy', () => this.remove(entry, false)),
@@ -607,11 +612,11 @@ export class DriftManager {
   getLayouts(): DriftContainerData {
     return {
       version: CONTAINER_DATA_VERSION,
-      containers: Array.from(this.entries.values(), (e) =>
-        e.height
-          ? { id: e.id, layout: e.editor.getLayout(), height: e.height }
-          : { id: e.id, layout: e.editor.getLayout() },
-      ),
+      containers: Array.from(this.entries.values(), (e) => ({
+        id: e.id,
+        layout: e.editor.getLayout(),
+        ...sanitizeContainerProps(e),
+      })),
     };
   }
 

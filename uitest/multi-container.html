@@ -289,6 +289,8 @@
           columns: 12,
           rowHeight: 30,
           breakpoints: [],
+          // Viewer(renderContainersViewer)에서 이 컨테이너의 바깥 여백. 숫자 하나(10) 또는 방향별({ bottom: 10 }), 음수 가능
+          containerMargin: { bottom: 10 },
           items: [
             { id: 'logo', x: 0, y: 0, w: 3, h: 2, content: 'Logo' },
             { id: 'title', x: 3, y: 0, w: 9, h: 2, content: 'Title' },
@@ -377,8 +379,9 @@
 
       function registerDefaults() {
         // body 는 Viewer fitHeight 에서 남은 높이를 채운다(header/footer 는 고정 높이)
+        const extra = { body: { height: 'auto' } };
         for (const [id, layout] of Object.entries(PRESETS)) {
-          if (!manager.has(id)) addContainer(id, layout, id === 'body' ? { height: 'auto' } : {});
+          if (!manager.has(id)) addContainer(id, layout, extra[id] ?? {});
         }
       }
 

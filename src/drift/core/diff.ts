@@ -29,6 +29,7 @@ export function layoutsEqual(a: DriftLayout, b: DriftLayout): boolean {
   if (!!a.float !== !!b.float) return false;
   if (a.items.length !== b.items.length) return false;
   if (JSON.stringify(a.breakpoints) !== JSON.stringify(b.breakpoints)) return false;
+  if (JSON.stringify(a.containerMargin) !== JSON.stringify(b.containerMargin)) return false;
   for (let i = 0; i < a.items.length; i++) if (!itemsEqual(a.items[i], b.items[i])) return false;
   return true;
 }

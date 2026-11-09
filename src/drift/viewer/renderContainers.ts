@@ -1,6 +1,6 @@
 import { parseContainerData } from '@/drift/core/containers';
 import { getRowCount } from '@/drift/core/geometry';
-import { DriftContainerData, DriftItem } from '@t/DriftLayout';
+import { DriftContainerData, DriftContainerMargin, DriftItem } from '@t/DriftLayout';
 import { DEFAULT_FIT_MIN_HEIGHT, DEFAULT_MOBILE_MAX_WIDTH, renderViewer, ViewerOptions } from './renderViewer';
 import { assertScope, escapeHtml } from './escape';
 
@@ -12,7 +12,10 @@ export interface ContainersViewerOptions extends Omit<ViewerOptions, 'renderCont
   scope?: string;
   /** 항목 내부 HTML 을 직접 만든다. 반환 값은 escape 되지 않는다 (renderViewer 와 같다) */
   renderContent?: (item: DriftItem, containerId: string) => string;
-  /** 컨테이너 사이 간격(px). 기본 0 */
+  /**
+   * 모든 컨테이너 사이 간격(px). 기본 12. 음수/잘못된 값이면 기본값.
+   * 컨테이너별 여백은 각 레이아웃의 `containerMargin` 으로 정하며, 둘을 함께 쓰면 더해진다.
+   */
   containerGap?: number;
 }
 
@@ -21,12 +24,20 @@ export interface ContainersViewerResult {
   css: string;
   scope: string;
   /** 컨테이너별 렌더링 정보 (데이터 순서). height 는 실제로 적용된 방식 */
-  containers: { id: string; scope: string; height: 'auto' | 'fixed'; rows: number }[];
+  containers: { id: string; scope: string; height: 'auto' | 'fixed'; rows: number; margin: string; zIndex: number }[];
 }
 
 const fmt = (n: number): string => String(Number.isFinite(n) ? n : 0);
+const NO_MARGIN = '0px 0px 0px 0px';
+const isFiniteNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const nonNegative = (v: unknown, fallback: number): number =>
   typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : fallback;
+
+/** margin → CSS 값 ('8px 0px -4px 0px'). 음수도 그대로 쓰고, 잘못된 값(NaN 등)은 0 */
+function marginValue(input: number | DriftContainerMargin | undefined): string {
+  const o = typeof input === 'number' ? { top: input, right: input, bottom: input, left: input } : input || {};
+  return [o.top, o.right, o.bottom, o.left].map((v) => `${fmt(isFiniteNumber(v) ? v : 0)}px`).join(' ');
+}
 
 /**
  * 여러 컨테이너 레이아웃 묶음(DriftContainerData)을 세로로 쌓은 정적 HTML 과 CSS 로 만든다.
@@ -37,6 +48,8 @@ const nonNegative = (v: unknown, fallback: number): number =>
  * - 그 밖의 컨테이너: 고정 높이. 행 수 × rowHeight (+ 행 사이 gap) 의 일반 Viewer 배치다.
  * - auto 컨테이너가 하나도 없으면 모든 컨테이너를 auto 로 본다.
  * - `minHeight` 는 바깥 묶음 전체에 적용된다. mobileMaxWidth 이하에서는 맞춤을 끄고 모두 rowHeight 로 쌓는다.
+ *
+ * 컨테이너가 겹치면(음수 containerMargin 등) 위에 있는(앞 순서) 컨테이너가 위로 올라온다 (z-index = 개수 - 순번).
  *
  * fitHeight 가 아니면 모든 컨테이너를 일반 Viewer 로 쌓는다. 출력에는 스크립트/인라인 style 이 없다.
  */
@@ -57,6 +70,7 @@ export function renderContainersViewer(
   const css: string[] = [];
   const html: string[] = [];
   const containers: ContainersViewerResult['containers'] = [];
+  const margins: string[] = [];
 
   data.containers.forEach((c, i) => {
     const auto = !!fit && (!anyAuto || c.height === 'auto');
@@ -70,17 +84,32 @@ export function renderContainersViewer(
       renderContent: renderContent ? (item) => renderContent(item, c.id) : undefined,
     });
     css.push(inner.css);
+    // 레이아웃의 containerMargin. 같은 값은 한 규칙으로 묶어 data-margin 번호로 연결한다
+    const margin = marginValue(c.layout.containerMargin);
+    if (!margins.includes(margin)) margins.push(margin);
     let attrs = `class="${scope}-container" data-container-id="${escapeHtml(c.id)}"`;
+    if (margin !== NO_MARGIN) attrs += ` data-margin="${margins.indexOf(margin)}"`;
     if (fit) attrs += ` data-height="${auto ? 'auto' : 'fixed'}"${auto ? ` data-rows="${rows}"` : ''}`;
     html.push(`<div ${attrs}>${inner.html}</div>`);
-    containers.push({ id: c.id, scope: inner.scope, height: auto ? 'auto' : 'fixed', rows });
+    containers.push({
+      id: c.id,
+      scope: inner.scope,
+      height: auto ? 'auto' : 'fixed',
+      rows,
+      margin,
+      zIndex: data.containers.length - i,
+    });
   });
 
   css.push(
     `${root}{display:flex;flex-direction:column;box-sizing:border-box;width:100%;gap:${fmt(
-      nonNegative(containerGap, 0),
+      nonNegative(containerGap, 12),
     )}px}`,
-    `${root}>.${scope}-container{flex:none;min-width:0}`,
+    `${root}>.${scope}-container{flex:none;min-width:0;position:relative}`,
+    // 겹칠 때 앞 순서(위쪽) 컨테이너가 위로 오게 한다
+    ...containers.map((c, i) => `${root}>:nth-child(${i + 1}){z-index:${c.zIndex}}`),
+    // margin 은 flex 항목의 바깥 크기에 포함되므로 fitHeight 의 남은 높이 계산에서 자동으로 빠진다
+    ...margins.flatMap((m, i) => (m === NO_MARGIN ? [] : [`${root}>[data-margin="${i}"]{margin:${m}}`])),
   );
   if (fit) {
     const autoRows = Array.from(new Set(containers.filter((c) => c.height === 'auto').map((c) => c.rows))).sort(

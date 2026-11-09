@@ -48,8 +48,7 @@ export function parseContainerData(input: string | unknown): DriftContainerData 
     } catch (e) {
       throw new Error(`[drift] 컨테이너 "${id}" 의 layout 이 올바르지 않습니다: ${(e as Error).message}`);
     }
-    // 알 수 없는 height 값은 버린다 (고정 높이)
-    return raw.height === 'auto' ? { id, layout, height: 'auto' } : { id, layout };
+    return { id, layout, ...sanitizeContainerProps(raw) };
   });
   return { version: CONTAINER_DATA_VERSION, containers };
 }
@@ -59,11 +58,14 @@ export function serializeContainerData(data: DriftContainerData, space?: number)
   return JSON.stringify(
     {
       version: CONTAINER_DATA_VERSION,
-      containers: data.containers.map((c) =>
-        c.height === 'auto' ? { id: c.id, layout: c.layout, height: c.height } : { id: c.id, layout: c.layout },
-      ),
+      containers: data.containers.map((c) => ({ id: c.id, layout: c.layout, ...sanitizeContainerProps(c) })),
     },
     null,
     space,
   );
+}
+
+/** 컨테이너의 부가 속성(height)을 검증해 지정된 것만 담아 돌려준다. 알 수 없는 값은 버린다 */
+export function sanitizeContainerProps(raw: { height?: unknown }): Pick<DriftContainerLayout, 'height'> {
+  return raw.height === 'auto' ? { height: 'auto' } : {};
 }
